@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="IniAnchor.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:IniAnchor.App"
+    xmlns:vm="using:IniAnchor.App.ViewModels"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="IniAnchor.App">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid Padding="16" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: watched files -->
+            <Grid Grid.Column="0" RowSpacing="8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="AddFileButton" Content="Add ini file..." Click="AddFileButton_Click" />
+                    <Button Content="Remove selected"
+                            Command="{x:Bind ViewModel.RemoveFileCommand}"
+                            CommandParameter="{x:Bind ViewModel.SelectedFile, Mode=OneWay}" />
+                </StackPanel>
+
+                <Grid Grid.Row="1">
+                    <ListView ItemsSource="{x:Bind ViewModel.WatchedFiles}"
+                              SelectedItem="{x:Bind ViewModel.SelectedFile, Mode=TwoWay}">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:WatchedFileViewModel">
+                                <TextBlock Text="{x:Bind DisplayText}" />
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <TextBlock Text="No files yet. Click 'Add ini file...' to get started."
+                               Visibility="{x:Bind ViewModel.HasNoWatchedFiles, Mode=OneWay}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               TextAlignment="Center" TextWrapping="Wrap" MaxWidth="220"
+                               Opacity="0.6" IsHitTestVisible="False" />
+                </Grid>
+            </Grid>
+
+            <!-- Right: watched keys for the selected file -->
+            <Grid Grid.Column="1" RowSpacing="8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="AddKeyButton" Content="Add key..." Click="AddKeyButton_Click" />
+                    <Button Content="Remove selected key" Click="RemoveKeyButton_Click" />
+                </StackPanel>
+
+                <Grid Grid.Row="1">
+                    <ListView x:Name="KeysList"
+                              ItemsSource="{x:Bind ViewModel.SelectedFile.WatchedKeys, Mode=OneWay}">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:WatchedKeyViewModel">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="{x:Bind DisplayLabel}"
+                                               VerticalAlignment="Center"
+                                               MinWidth="160"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBox Text="{x:Bind DesiredValue, Mode=TwoWay}"
+                                             Width="160"
+                                             LostFocus="DesiredValueBox_LostFocus" />
+                                    <TextBlock Text="{x:Bind Status, Mode=OneWay}" Opacity="0.6" VerticalAlignment="Center" />
+                                    <TextBlock Text="⚠"
+                                               Foreground="Red"
+                                               VerticalAlignment="Center"
+                                               Visibility="{x:Bind HasApplyError, Mode=OneWay}"
+                                               ToolTipService.ToolTip="{x:Bind LastApplyError, Mode=OneWay}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <TextBlock Text="{x:Bind ViewModel.KeysEmptyMessage, Mode=OneWay}"
+                               Visibility="{x:Bind ViewModel.ShowKeysEmptyMessage, Mode=OneWay}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               TextAlignment="Center" TextWrapping="Wrap" MaxWidth="220"
+                               Opacity="0.6" IsHitTestVisible="False" />
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <!-- Bottom: single global Apply, per the app's whole point -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12">
+            <Button Content="Apply"
+                    Style="{StaticResource AccentButtonStyle}"
+                    Click="ApplyButton_Click" />
+            <TextBlock Text="{x:Bind ViewModel.LastApplyMessage, Mode=OneWay}"
+                       VerticalAlignment="Center"
+                       Opacity="0.8" />
+        </StackPanel>
+    </Grid>
+</Window>

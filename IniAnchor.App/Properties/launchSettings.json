@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "IniAnchor.App (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "IniAnchor.App (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
