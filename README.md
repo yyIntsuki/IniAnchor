@@ -2,6 +2,11 @@
 
 A small Windows desktop app for keeping specific values in `.ini` files pinned to what you want them to be — add the files you care about, pick the keys, set the values you want, and apply them whenever you need to.
 
+## Future Goals (for now)
+
+- **Improve UX** Improve user interaction logic and flow.
+- **Improve UI** Improve visual structure of how elements are presented.
+
 ## Features
 
 - **Watch a list of `.ini` files.** Add any number of files via a standard file picker; the list persists across restarts.
