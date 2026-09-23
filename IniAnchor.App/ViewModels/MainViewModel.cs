@@ -27,7 +27,17 @@ public partial class MainViewModel : ObservableObject
     private bool _hasNoWatchedFiles = true;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedFile))]
     private WatchedFileViewModel? _selectedFile;
+
+    // Selected row in the keys list (bound TwoWay, like SelectedFile).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedKey))]
+    private WatchedKeyViewModel? _selectedKey;
+
+    // Flat bools for enabling buttons - deliberately not nested x:Bind paths (§4.1).
+    public bool HasSelectedFile => SelectedFile is not null;
+    public bool HasSelectedKey => SelectedKey is not null;
 
     // Combined message for the right panel's empty state. Deliberately NOT a nested x:Bind
     // path like "SelectedFile.HasNoWatchedKeys" - x:Bind's null-fallback through a second
@@ -68,6 +78,7 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnSelectedFileChanged(WatchedFileViewModel? value)
     {
+        SelectedKey = null; // the keys list now shows a different file's keys
         value?.RefreshKeyStatuses();
         UpdateKeysEmptyMessage();
     }
@@ -160,6 +171,10 @@ public partial class MainViewModel : ObservableObject
 
         SelectedFile.Model.WatchedKeys.Remove(key.Model);
         SelectedFile.WatchedKeys.Remove(key);
+
+        if (SelectedKey == key)
+            SelectedKey = null;
+
         UpdateKeysEmptyMessage();
         Persist();
     }

@@ -4,7 +4,10 @@ using IniAnchor.App.ViewModels;
 using IniAnchor.App.Views;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.Windows.Storage.Pickers;
+using Windows.System;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -74,11 +77,31 @@ namespace IniAnchor.App
             }
         }
 
-        private void RemoveKeyButton_Click(object sender, RoutedEventArgs e)
+        // Deselect (shared by both lists): clicking empty space below the rows clears the
+        // selection, like Explorer. Taps on a row (or a TextBox inside one) are ignored.
+        // The TwoWay SelectedItem binding pushes the null into the view model.
+        private void List_Tapped(object sender, TappedRoutedEventArgs e)
         {
-            if (KeysList.SelectedItem is WatchedKeyViewModel key)
+            var list = (ListView)sender;
+
+            for (var node = e.OriginalSource as DependencyObject;
+                 node is not null && node != list;
+                 node = VisualTreeHelper.GetParent(node))
             {
-                ViewModel.RemoveKeyCommand.Execute(key);
+                if (node is ListViewItem)
+                    return; // tapped a row - normal selection behavior
+            }
+
+            list.SelectedItem = null;
+        }
+
+        // Deselect via keyboard: Esc clears the focused list's selection.
+        private void List_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key == VirtualKey.Escape)
+            {
+                ((ListView)sender).SelectedItem = null;
+                e.Handled = true;
             }
         }
 

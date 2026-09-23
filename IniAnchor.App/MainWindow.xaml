@@ -36,13 +36,17 @@
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
                     <Button x:Name="AddFileButton" Content="Add ini file..." Click="AddFileButton_Click" />
                     <Button Content="Remove selected"
+                            IsEnabled="{x:Bind ViewModel.HasSelectedFile, Mode=OneWay}"
                             Command="{x:Bind ViewModel.RemoveFileCommand}"
                             CommandParameter="{x:Bind ViewModel.SelectedFile, Mode=OneWay}" />
                 </StackPanel>
 
                 <Grid Grid.Row="1">
                     <ListView ItemsSource="{x:Bind ViewModel.WatchedFiles}"
-                              SelectedItem="{x:Bind ViewModel.SelectedFile, Mode=TwoWay}">
+                              SelectedItem="{x:Bind ViewModel.SelectedFile, Mode=TwoWay}"
+                              Background="Transparent"
+                              Tapped="List_Tapped"
+                              KeyDown="List_KeyDown">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="vm:WatchedFileViewModel">
                                 <TextBlock Text="{x:Bind DisplayText}" />
@@ -65,13 +69,22 @@
                 </Grid.RowDefinitions>
 
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
-                    <Button x:Name="AddKeyButton" Content="Add key..." Click="AddKeyButton_Click" />
-                    <Button Content="Remove selected key" Click="RemoveKeyButton_Click" />
+                    <Button x:Name="AddKeyButton" Content="Add key..."
+                            IsEnabled="{x:Bind ViewModel.HasSelectedFile, Mode=OneWay}"
+                            Click="AddKeyButton_Click" />
+                    <Button Content="Remove selected key"
+                            IsEnabled="{x:Bind ViewModel.HasSelectedKey, Mode=OneWay}"
+                            Command="{x:Bind ViewModel.RemoveKeyCommand}"
+                            CommandParameter="{x:Bind ViewModel.SelectedKey, Mode=OneWay}" />
                 </StackPanel>
 
                 <Grid Grid.Row="1">
                     <ListView x:Name="KeysList"
-                              ItemsSource="{x:Bind ViewModel.SelectedFile.WatchedKeys, Mode=OneWay}">
+                              ItemsSource="{x:Bind ViewModel.SelectedFile.WatchedKeys, Mode=OneWay}"
+                              SelectedItem="{x:Bind ViewModel.SelectedKey, Mode=TwoWay}"
+                              Background="Transparent"
+                              Tapped="List_Tapped"
+                              KeyDown="List_KeyDown">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="vm:WatchedKeyViewModel">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
