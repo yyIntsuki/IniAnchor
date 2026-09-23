@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -28,16 +30,16 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedFile))]
+    [NotifyPropertyChangedFor(nameof(SelectedFileKeys))]
     private WatchedFileViewModel? _selectedFile;
 
-    // Selected row in the keys list (bound TwoWay, like SelectedFile).
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasSelectedKey))]
-    private WatchedKeyViewModel? _selectedKey;
-
-    // Flat bools for enabling buttons - deliberately not nested x:Bind paths (§4.1).
+    // Flat bool for enabling "Add key..." - deliberately not a nested x:Bind path (§4.1).
     public bool HasSelectedFile => SelectedFile is not null;
-    public bool HasSelectedKey => SelectedKey is not null;
+
+    // Flat source for the keys list. Deliberately not the nested x:Bind path
+    // "SelectedFile.WatchedKeys": that never cleared the list when SelectedFile became null
+    // (deselect/remove), same x:Bind null-path problem as in §4.1.
+    public ObservableCollection<WatchedKeyViewModel>? SelectedFileKeys => SelectedFile?.WatchedKeys;
 
     // Combined message for the right panel's empty state. Deliberately NOT a nested x:Bind
     // path like "SelectedFile.HasNoWatchedKeys" - x:Bind's null-fallback through a second
@@ -78,7 +80,6 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnSelectedFileChanged(WatchedFileViewModel? value)
     {
-        SelectedKey = null; // the keys list now shows a different file's keys
         value?.RefreshKeyStatuses();
         UpdateKeysEmptyMessage();
     }
@@ -133,6 +134,29 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Opens the file in whatever app Windows has associated with .ini files (usually
+    /// Notepad) - the same as double-clicking it in Explorer.
+    /// </summary>
+    public void OpenFileInEditor(WatchedFileViewModel file)
+    {
+        if (!File.Exists(file.FilePath))
+        {
+            LastApplyMessage = $"Could not open file - it no longer exists: {file.FilePath}";
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(file.FilePath) { UseShellExecute = true });
+        }
+        catch (Win32Exception ex)
+        {
+            // e.g. no app is associated with .ini files
+            LastApplyMessage = $"Could not open file: {ex.Message}";
+        }
+    }
+
+    /// <summary>
     /// Adds a key picked from <see cref="SelectedFile"/>'s picker dialog to that file's
     /// watch list. Desired value starts out equal to the current value on disk — a
     /// sensible default the user then edits.
@@ -171,10 +195,6 @@ public partial class MainViewModel : ObservableObject
 
         SelectedFile.Model.WatchedKeys.Remove(key.Model);
         SelectedFile.WatchedKeys.Remove(key);
-
-        if (SelectedKey == key)
-            SelectedKey = null;
-
         UpdateKeysEmptyMessage();
         Persist();
     }

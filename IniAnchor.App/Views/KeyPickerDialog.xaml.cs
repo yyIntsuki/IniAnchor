@@ -15,16 +15,41 @@ namespace IniAnchor.App.Views;
 /// </summary>
 public sealed partial class KeyPickerDialog : ContentDialog
 {
-    private readonly List<IniKeyPickItem> _allItems = new();
+    private readonly List<IniKeyPickItem> _allItems = new(); // key rows only; headers added on display
 
-    /// <summary>The item the user picked, once the dialog closes with Primary result. Null otherwise.</summary>
+    /// <summary>
+    /// The item the user confirmed (Add button or double-tap). Stays null on Cancel/Esc,
+    /// even if a row was highlighted - merely highlighting a row is not a pick.
+    /// </summary>
     public IniKeyPickItem? SelectedItem { get; private set; }
 
     public KeyPickerDialog(string filePath)
     {
         InitializeComponent();
         LoadItems(filePath);
-        ResultsList.ItemsSource = _allItems;
+        ResultsList.ItemsSource = WithSectionHeaders(_allItems);
+    }
+
+    /// <summary>
+    /// Inserts a section title row wherever the section changes, so each section's name is
+    /// shown once above its keys instead of in front of every key. Keys outside any section
+    /// (top of the file) get no title. Used both on open and after every search.
+    /// </summary>
+    private static List<IniKeyPickItem> WithSectionHeaders(IEnumerable<IniKeyPickItem> keys)
+    {
+        var rows = new List<IniKeyPickItem>();
+        string? currentSection = null;
+
+        foreach (var key in keys)
+        {
+            if (!string.IsNullOrEmpty(key.Section) && key.Section != currentSection)
+                rows.Add(new IniKeyPickItem { Section = key.Section, IsHeader = true });
+
+            currentSection = key.Section;
+            rows.Add(key);
+        }
+
+        return rows;
     }
 
     private void LoadItems(string filePath)
@@ -61,22 +86,43 @@ public sealed partial class KeyPickerDialog : ContentDialog
     {
         var filter = SearchBox.Text;
 
-        ResultsList.ItemsSource = string.IsNullOrWhiteSpace(filter)
+        var matches = string.IsNullOrWhiteSpace(filter)
             ? _allItems
             : _allItems.Where(item =>
                 item.KeyName.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
-                (item.Section?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false)).ToList();
+                (item.Section?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false));
+
+        ResultsList.ItemsSource = WithSectionHeaders(matches);
+    }
+
+    // Title rows can't be clicked (no hover highlight either). Containers get recycled, so
+    // this is set both ways every time.
+    private void ResultsList_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
+    {
+        args.ItemContainer.IsHitTestVisible = args.Item is not IniKeyPickItem { IsHeader: true };
     }
 
     private void ResultsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        // A title row can still be reached with the arrow keys - don't let it count as a pick.
+        if (ResultsList.SelectedItem is IniKeyPickItem { IsHeader: true })
+        {
+            ResultsList.SelectedItem = null; // re-raises this event, which disables "Add"
+            return;
+        }
+
+        // Only enables "Add" - SelectedItem is set on confirm, so Cancel adds nothing.
+        IsPrimaryButtonEnabled = ResultsList.SelectedItem is IniKeyPickItem;
+    }
+
+    private void Dialog_PrimaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
+    {
         SelectedItem = ResultsList.SelectedItem as IniKeyPickItem;
-        IsPrimaryButtonEnabled = SelectedItem is not null;
     }
 
     private void ResultsList_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
-        if (ResultsList.SelectedItem is IniKeyPickItem item)
+        if (ResultsList.SelectedItem is IniKeyPickItem { IsHeader: false } item)
         {
             SelectedItem = item;
             Hide();

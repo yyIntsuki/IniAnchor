@@ -1,13 +1,16 @@
 using System;
+using System.IO;
 using System.Linq;
 using IniAnchor.App.ViewModels;
 using IniAnchor.App.Views;
+using IniAnchor.Core.Persistence;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
 using Microsoft.Windows.Storage.Pickers;
 using Windows.System;
+using Windows.Graphics;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -24,6 +27,40 @@ namespace IniAnchor.App
         public MainWindow()
         {
             InitializeComponent();
+
+            RestoreWindowSize();
+            AppWindow.Closing += (_, _) => SaveWindowSize();
+        }
+
+        // --- Remembered window size ---
+        // Stored in settings.json next to the .exe, like watchlist.json (portable, §3.5).
+
+        private readonly SettingsStore _settingsStore = new(Path.Combine(
+            Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory,
+            "settings.json"));
+
+        private void RestoreWindowSize()
+        {
+            var settings = _settingsStore.Load();
+
+            if (settings.WindowWidth is int width && settings.WindowHeight is int height &&
+                width >= 400 && height >= 300) // ignore nonsense/tiny values
+            {
+                AppWindow.Resize(new SizeInt32(width, height));
+            }
+        }
+
+        private void SaveWindowSize()
+        {
+            // Don't save a maximized/minimized size - keep the last normal size instead.
+            if (AppWindow.Presenter is OverlappedPresenter { State: not OverlappedPresenterState.Restored })
+                return;
+
+            // Load first so any other settings in the file are kept.
+            var settings = _settingsStore.Load();
+            settings.WindowWidth = AppWindow.Size.Width;
+            settings.WindowHeight = AppWindow.Size.Height;
+            _settingsStore.Save(settings);
         }
 
         // File picking needs the window (§4.5), so it lives here rather than in the view model;
@@ -80,19 +117,21 @@ namespace IniAnchor.App
         // Deselect (shared by both lists): clicking empty space below the rows clears the
         // selection, like Explorer. Taps on a row (or a TextBox inside one) are ignored.
         // The TwoWay SelectedItem binding pushes the null into the view model.
+        //
+        // A tap is "on a row" when the tapped element's DataContext is one of our item view
+        // models (everything inside a row inherits the row's item). Deliberately NOT a
+        // visual-tree walk checking "is ListViewItem": that worked in Debug but not in the
+        // trimmed publish build, so every single click selected and then instantly
+        // deselected the row. Our own view-model types are safe to type-check when trimmed.
         private void List_Tapped(object sender, TappedRoutedEventArgs e)
         {
-            var list = (ListView)sender;
+            var context = (e.OriginalSource as DependencyObject)
+                ?.GetValue(FrameworkElement.DataContextProperty);
 
-            for (var node = e.OriginalSource as DependencyObject;
-                 node is not null && node != list;
-                 node = VisualTreeHelper.GetParent(node))
-            {
-                if (node is ListViewItem)
-                    return; // tapped a row - normal selection behavior
-            }
+            if (context is WatchedFileViewModel or WatchedKeyViewModel)
+                return; // tapped a row - normal selection behavior
 
-            list.SelectedItem = null;
+            ((ListView)sender).SelectedItem = null;
         }
 
         // Deselect via keyboard: Esc clears the focused list's selection.
@@ -111,6 +150,60 @@ namespace IniAnchor.App
         private void DesiredValueBox_LostFocus(object sender, RoutedEventArgs e)
         {
             ViewModel.Persist();
+        }
+
+        // --- Hover buttons on rows (open/remove on files, remove on keys) ---
+
+        // The row's item, found via DataContext - the same trim-safe lookup as List_Tapped.
+        private static object? RowItem(object sender) =>
+            (sender as DependencyObject)?.GetValue(FrameworkElement.DataContextProperty);
+
+        private static void SetRowHovered(object sender, bool hovered)
+        {
+            switch (RowItem(sender))
+            {
+                case WatchedFileViewModel file: file.IsHovered = hovered; break;
+                case WatchedKeyViewModel key: key.IsHovered = hovered; break;
+            }
+        }
+
+        private void Row_PointerEntered(object sender, PointerRoutedEventArgs e)
+        {
+            SetRowHovered(sender, true);
+        }
+
+        private void Row_PointerExited(object sender, PointerRoutedEventArgs e)
+        {
+            // Pointer events bubble up from children: moving from the text onto a button
+            // raises PointerExited here even though the pointer is still on the row. Only
+            // hide the buttons once the pointer has actually left the row's bounds.
+            if (sender is UIElement row)
+            {
+                var p = e.GetCurrentPoint(row).Position;
+                var size = row.ActualSize;
+                if (p.X >= 0 && p.Y >= 0 && p.X < size.X && p.Y < size.Y)
+                    return;
+            }
+
+            SetRowHovered(sender, false);
+        }
+
+        private void OpenFileButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (RowItem(sender) is WatchedFileViewModel file)
+                ViewModel.OpenFileInEditor(file);
+        }
+
+        private void RemoveFileButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (RowItem(sender) is WatchedFileViewModel file)
+                ViewModel.RemoveFileCommand.Execute(file);
+        }
+
+        private void RemoveKeyButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (RowItem(sender) is WatchedKeyViewModel key)
+                ViewModel.RemoveKeyCommand.Execute(key);
         }
 
         // Confirmation needs a XamlRoot (like the key picker), so it lives here; the actual

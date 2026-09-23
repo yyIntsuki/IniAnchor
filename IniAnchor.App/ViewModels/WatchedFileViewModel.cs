@@ -29,6 +29,10 @@ public partial class WatchedFileViewModel : ObservableObject
 
     public string FilePath => Model.FilePath;
 
+    /// <summary>True while the pointer is over this file's row - shows the row's "open" button.</summary>
+    [ObservableProperty]
+    private bool _isHovered;
+
     /// <summary>
     /// Re-parses the file on disk and updates every watched key's Status (unique/not-found/
     /// duplicate), per §4.4 ("surfaces duplicates immediately"). Swallows IO/parse errors —

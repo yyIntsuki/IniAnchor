@@ -15,6 +15,16 @@
     </Window.SystemBackdrop>
 
     <Grid Padding="16" RowSpacing="12">
+        <Grid.Resources>
+            <!-- Shared by both lists: the row fills the whole item (no default padding), so
+                 hovering anywhere on it shows its buttons, and the buttons sit at the right edge. -->
+            <Style x:Key="FullRowItemStyle" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            </Style>
+        </Grid.Resources>
+
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
@@ -35,21 +45,47 @@
 
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
                     <Button x:Name="AddFileButton" Content="Add ini file..." Click="AddFileButton_Click" />
-                    <Button Content="Remove selected"
-                            IsEnabled="{x:Bind ViewModel.HasSelectedFile, Mode=OneWay}"
-                            Command="{x:Bind ViewModel.RemoveFileCommand}"
-                            CommandParameter="{x:Bind ViewModel.SelectedFile, Mode=OneWay}" />
                 </StackPanel>
 
                 <Grid Grid.Row="1">
                     <ListView ItemsSource="{x:Bind ViewModel.WatchedFiles}"
                               SelectedItem="{x:Bind ViewModel.SelectedFile, Mode=TwoWay}"
+                              ItemContainerStyle="{StaticResource FullRowItemStyle}"
                               Background="Transparent"
                               Tapped="List_Tapped"
                               KeyDown="List_KeyDown">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="vm:WatchedFileViewModel">
-                                <TextBlock Text="{x:Bind DisplayText}" />
+                                <Grid Padding="12,0,4,0" ColumnSpacing="4"
+                                      Background="Transparent"
+                                      PointerEntered="Row_PointerEntered"
+                                      PointerExited="Row_PointerExited">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{x:Bind DisplayText}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <Button Grid.Column="1"
+                                            Width="32" Height="32" Padding="0"
+                                            VerticalAlignment="Center"
+                                            Visibility="{x:Bind IsHovered, Mode=OneWay}"
+                                            Click="OpenFileButton_Click"
+                                            ToolTipService.ToolTip="Open in default editor">
+                                        <FontIcon Glyph="&#xE70F;" FontSize="14" />
+                                    </Button>
+                                    <!-- Remove is always the rightmost button -->
+                                    <Button Grid.Column="2"
+                                            Width="32" Height="32" Padding="0"
+                                            VerticalAlignment="Center"
+                                            Visibility="{x:Bind IsHovered, Mode=OneWay}"
+                                            Click="RemoveFileButton_Click"
+                                            ToolTipService.ToolTip="Remove from list">
+                                        <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                    </Button>
+                                </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
@@ -72,36 +108,56 @@
                     <Button x:Name="AddKeyButton" Content="Add key..."
                             IsEnabled="{x:Bind ViewModel.HasSelectedFile, Mode=OneWay}"
                             Click="AddKeyButton_Click" />
-                    <Button Content="Remove selected key"
-                            IsEnabled="{x:Bind ViewModel.HasSelectedKey, Mode=OneWay}"
-                            Command="{x:Bind ViewModel.RemoveKeyCommand}"
-                            CommandParameter="{x:Bind ViewModel.SelectedKey, Mode=OneWay}" />
                 </StackPanel>
 
                 <Grid Grid.Row="1">
-                    <ListView x:Name="KeysList"
-                              ItemsSource="{x:Bind ViewModel.SelectedFile.WatchedKeys, Mode=OneWay}"
-                              SelectedItem="{x:Bind ViewModel.SelectedKey, Mode=TwoWay}"
+                    <ListView ItemsSource="{x:Bind ViewModel.SelectedFileKeys, Mode=OneWay}"
+                              ItemContainerStyle="{StaticResource FullRowItemStyle}"
                               Background="Transparent"
                               Tapped="List_Tapped"
                               KeyDown="List_KeyDown">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="vm:WatchedKeyViewModel">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Grid Padding="12,0,4,0" ColumnSpacing="8"
+                                      Background="Transparent"
+                                      PointerEntered="Row_PointerEntered"
+                                      PointerExited="Row_PointerExited">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
                                     <TextBlock Text="{x:Bind DisplayLabel}"
                                                VerticalAlignment="Center"
                                                MinWidth="160"
                                                TextTrimming="CharacterEllipsis" />
-                                    <TextBox Text="{x:Bind DesiredValue, Mode=TwoWay}"
+                                    <TextBox Grid.Column="1"
+                                             Text="{x:Bind DesiredValue, Mode=TwoWay}"
                                              Width="160"
+                                             VerticalAlignment="Center"
                                              LostFocus="DesiredValueBox_LostFocus" />
-                                    <TextBlock Text="{x:Bind Status, Mode=OneWay}" Opacity="0.6" VerticalAlignment="Center" />
-                                    <TextBlock Text="⚠"
+                                    <TextBlock Grid.Column="2"
+                                               Text="{x:Bind Status, Mode=OneWay}"
+                                               Opacity="0.6" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="3"
+                                               Text="⚠"
                                                Foreground="Red"
                                                VerticalAlignment="Center"
                                                Visibility="{x:Bind HasApplyError, Mode=OneWay}"
                                                ToolTipService.ToolTip="{x:Bind LastApplyError, Mode=OneWay}" />
-                                </StackPanel>
+                                    <!-- Column 4 is empty space, pushing remove to the right edge -->
+                                    <Button Grid.Column="5"
+                                            Width="32" Height="32" Padding="0"
+                                            VerticalAlignment="Center"
+                                            Visibility="{x:Bind IsHovered, Mode=OneWay}"
+                                            Click="RemoveKeyButton_Click"
+                                            ToolTipService.ToolTip="Stop watching this key">
+                                        <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                    </Button>
+                                </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>

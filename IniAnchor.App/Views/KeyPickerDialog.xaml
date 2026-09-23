@@ -10,7 +10,8 @@
     PrimaryButtonText="Add"
     IsPrimaryButtonEnabled="False"
     CloseButtonText="Cancel"
-    DefaultButton="Primary">
+    DefaultButton="Primary"
+    PrimaryButtonClick="Dialog_PrimaryButtonClick">
 
     <Grid RowSpacing="8" MinWidth="420" MinHeight="360">
         <Grid.RowDefinitions>
@@ -26,10 +27,22 @@
         <ListView x:Name="ResultsList"
                   Grid.Row="1"
                   SelectionChanged="ResultsList_SelectionChanged"
-                  DoubleTapped="ResultsList_DoubleTapped">
+                  DoubleTapped="ResultsList_DoubleTapped"
+                  ContainerContentChanging="ResultsList_ContainerContentChanging">
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="vm:IniKeyPickItem">
-                    <TextBlock Text="{x:Bind DisplayLabel}" TextTrimming="CharacterEllipsis" />
+                    <Grid>
+                        <!-- Section title row -->
+                        <TextBlock Text="{x:Bind Section}"
+                                   Visibility="{x:Bind IsHeader}"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}"
+                                   Margin="0,8,0,0" />
+                        <!-- Key row, indented under its section -->
+                        <TextBlock Text="{x:Bind KeyLabel}"
+                                   Visibility="{x:Bind IsKeyRow}"
+                                   Margin="12,0,0,0"
+                                   TextTrimming="CharacterEllipsis" />
+                    </Grid>
                 </DataTemplate>
             </ListView.ItemTemplate>
         </ListView>

@@ -24,6 +24,10 @@ public partial class WatchedKeyViewModel : ObservableObject
     /// <summary>What the key list shows: "[Section] KeyName" or just "KeyName" when there's no section.</summary>
     public string DisplayLabel => string.IsNullOrEmpty(Model.Section) ? Model.KeyName : $"[{Model.Section}] {Model.KeyName}";
 
+    /// <summary>True while the pointer is over this key's row - shows the row's remove button.</summary>
+    [ObservableProperty]
+    private bool _isHovered;
+
     [ObservableProperty]
     private string _desiredValue;
 
