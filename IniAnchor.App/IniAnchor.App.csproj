@@ -26,6 +26,13 @@
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
+    <!--
+      Name the app's resource file (compiled XAML etc.) resources.pri instead of the default
+      <AssemblyName>.pri. WinUI finds resources.pri regardless of the .exe's name; with the
+      default name, renaming the .exe (e.g. IniAnchor-v0.1.0-win-x64.exe for a release) makes
+      WinUI look for a matching <newname>.pri, fail to load MainWindow, and crash on startup.
+    -->
+    <ProjectPriFileName>resources.pri</ProjectPriFileName>
   </PropertyGroup>
 
   <ItemGroup>
