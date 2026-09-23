@@ -12,6 +12,20 @@
     <WinUISDKReferences>false</WinUISDKReferences>
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
+    <!-- Required by the CsWinRT source generator for the attributes in WinRTExposedTypes.cs. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!--
+      Unpackaged deployment (no MSIX, no installer) so the app can be published as a
+      near-single, portable .exe and just double-clicked - see README.md "Publishing a
+      standalone .exe". WindowsAppSDKSelfContained + SelfContained bundle the Windows App
+      SDK and .NET runtime into the publish output, so the target machine needs neither
+      installed.
+    -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -54,11 +68,44 @@
     <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
   </PropertyGroup>
 
-  <!-- Publish Properties -->
+  <!--
+    Publish Properties - the single source of truth for these (the .pubxml profiles must not
+    override them). Trimming removes unused .NET code from the self-contained publish.
+    ReadyToRun is off on purpose: it speeds up startup slightly but roughly doubles the size
+    of the managed assemblies, and small size is the goal for this portable app.
+  -->
   <PropertyGroup>
-    <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
-    <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
+    <PublishReadyToRun>False</PublishReadyToRun>
     <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
     <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
+    <!--
+      Compresses everything bundled inside the single-file .exe. Costs a little startup time:
+      .NET assemblies are decompressed in memory on each launch (a fraction of a second here),
+      native DLLs are extracted once per build to %TEMP%\.net\IniAnchor.App\ and reused.
+    -->
+    <EnableCompressionInSingleFile>True</EnableCompressionInSingleFile>
   </PropertyGroup>
+
+  <!--
+    Exclude unused Windows App SDK features from the publish output (~55 MB).
+    The Windows App SDK ships its AI/ML stack (ONNX Runtime, DirectML, Windows AI APIs),
+    Search, Widgets and Workloads with every self-contained app. IniAnchor uses none of them,
+    and trimming can't remove them because they're native DLLs, not .NET code. Nothing loads
+    these unless the app calls those APIs, so leaving them out is safe.
+    If a Windows App SDK update makes the publish size jump again, check the new file names
+    in the build output and extend this pattern. Each excluded file is listed in the publish
+    output ("Excluded unused Windows App SDK file: ...").
+  -->
+  <PropertyGroup>
+    <IniAnchorExcludedFilesPattern>(?i)^(onnxruntime\.dll|DirectML\.dll|Microsoft\.ML\.OnnxRuntime\.dll|NPUDetect\.dll|PerceptiveStreaming\.dll|Microsoft\.Asg\..*|Microsoft\.Windows\.AI\..*|Microsoft\.Windows\.Search\..*|Microsoft\.Windows\.Widgets\..*|Microsoft\.Windows\.Workloads\..*|workloads\..*json)$</IniAnchorExcludedFilesPattern>
+  </PropertyGroup>
+
+  <Target Name="ExcludeUnusedWindowsAppSdkFeatures" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <_IniAnchorExcludedFile Include="@(ResolvedFileToPublish)"
+                              Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Filename)%(Extension)', '$(IniAnchorExcludedFilesPattern)'))" />
+      <ResolvedFileToPublish Remove="@(_IniAnchorExcludedFile)" />
+    </ItemGroup>
+    <Message Importance="high" Text="Excluded unused Windows App SDK file: %(_IniAnchorExcludedFile.Filename)%(_IniAnchorExcludedFile.Extension)" />
+  </Target>
 </Project>

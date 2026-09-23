@@ -23,13 +23,25 @@ A small Windows desktop app for keeping specific values in `.ini` files pinned t
 ## Requirements
 
 - Windows 10 (1809+) or Windows 11
-- [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (or build from source with the .NET 8 SDK + Visual Studio's WinUI 3 workload)
+- Nothing else to run the published `.exe` — it bundles .NET and the Windows App SDK. Building from source needs the .NET 8 SDK + Visual Studio's WinUI 3 workload.
 
 ## Building from source
 
 1. Open `IniAnchor.sln` in Visual Studio.
 2. Set `IniAnchor.App` as the startup project.
 3. Build and run (F5).
+
+## Publishing a standalone .exe
+
+The app doesn't need to be launched through Visual Studio. To produce a standalone build that runs on its own — no Visual Studio, no installer, and no need for .NET or the Windows App SDK to be pre-installed on the target machine — publish it as a self-contained, single-file app:
+
+```
+dotnet publish IniAnchor.App\IniAnchor.App.csproj -c Release -p:Platform=x64 -r win-x64 --self-contained true -p:PublishSingleFile=true -p:WindowsAppSDKSelfContained=true
+```
+
+(Swap `win-x64`/`x64` for `win-x86`/`x86` or `win-arm64`/`ARM64` if needed.) The output lands in `IniAnchor.App\bin\win-x64\publish\`: a single, trimmed and compressed `IniAnchor.App.exe` of about 34 MB. Copy it anywhere and double-click it; `watchlist.json` is created next to it. The `.pdb` files next to it are only debug symbols and don't need to be copied.
+
+You can also publish from Visual Studio itself: right-click `IniAnchor.App` → Publish → Folder, and pick the matching `win-x64`/`win-x86`/`win-arm64` profile.
 
 ## Project structure
 

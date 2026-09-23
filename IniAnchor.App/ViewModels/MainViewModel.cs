@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -41,7 +42,13 @@ public partial class MainViewModel : ObservableObject
     private const string SelectFileHint = "Select a file on the left to see its watched keys.";
     private const string NoKeysHint = "No keys watched in this file yet. Click 'Add key...' to get started.";
 
-    public MainViewModel() : this(new WatchlistStore())
+    // Stores watchlist.json next to the actual .exe (the portable "copy the folder" goal, §3.5).
+    // Deliberately NOT WatchlistStore's AppContext.BaseDirectory default: in the published
+    // single-file build that points to a random temp extraction folder under
+    // %TEMP%\.net\IniAnchor.App\, so the watchlist would be lost on every new build.
+    public MainViewModel() : this(new WatchlistStore(Path.Combine(
+        Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory,
+        "watchlist.json")))
     {
     }
 

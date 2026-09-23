@@ -4,8 +4,7 @@ using IniAnchor.App.ViewModels;
 using IniAnchor.App.Views;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Windows.Storage.Pickers;
-using WinRT.Interop;
+using Microsoft.Windows.Storage.Pickers;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -24,22 +23,31 @@ namespace IniAnchor.App
             InitializeComponent();
         }
 
-        // File picking needs the window handle (§4.5), so it lives here rather than in the
-        // view model; the actual add/persist logic stays in MainViewModel.AddFile.
+        // File picking needs the window (§4.5), so it lives here rather than in the view model;
+        // the actual add/persist logic stays in MainViewModel.AddFile.
+        // Uses the Windows App SDK picker (Microsoft.Windows.Storage.Pickers), not the old UWP
+        // one (Windows.Storage.Pickers): it takes the window's AppWindow.Id directly, so no COM
+        // interop (InitializeWithWindow) is needed - simpler, and safer for the trimmed publish.
         private async void AddFileButton_Click(object sender, RoutedEventArgs e)
         {
-            var picker = new FileOpenPicker();
-
-            var hwnd = WindowNative.GetWindowHandle(this);
-            InitializeWithWindow.Initialize(picker, hwnd);
-
-            picker.SuggestedStartLocation = PickerLocationId.ComputerFolder;
-            picker.FileTypeFilter.Add(".ini");
-
-            var file = await picker.PickSingleFileAsync();
-            if (file is not null)
+            try
             {
-                ViewModel.AddFile(file.Path);
+                var picker = new FileOpenPicker(AppWindow.Id)
+                {
+                    SuggestedStartLocation = PickerLocationId.ComputerFolder
+                };
+                picker.FileTypeFilter.Add(".ini");
+
+                var result = await picker.PickSingleFileAsync();
+                if (result is not null)
+                {
+                    ViewModel.AddFile(result.Path);
+                }
+            }
+            catch (Exception ex)
+            {
+                // async void handlers swallow exceptions invisibly - show it instead.
+                ViewModel.LastApplyMessage = $"Could not add file: {ex.GetType().Name}: {ex.Message}";
             }
         }
 

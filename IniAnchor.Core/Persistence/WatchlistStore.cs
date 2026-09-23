@@ -12,11 +12,6 @@ public class WatchlistStore
 {
     private const string DefaultFileName = "watchlist.json";
 
-    private static readonly JsonSerializerOptions SerializerOptions = new()
-    {
-        WriteIndented = true
-    };
-
     private readonly string _filePath;
 
     /// <summary>
@@ -37,7 +32,7 @@ public class WatchlistStore
         if (string.IsNullOrWhiteSpace(json))
             return new List<WatchedFile>();
 
-        return JsonSerializer.Deserialize<List<WatchedFile>>(json, SerializerOptions) ?? new List<WatchedFile>();
+        return JsonSerializer.Deserialize(json, WatchlistJsonContext.Default.ListWatchedFile) ?? new List<WatchedFile>();
     }
 
     public void Save(List<WatchedFile> watchedFiles)
@@ -46,7 +41,7 @@ public class WatchlistStore
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
 
-        var json = JsonSerializer.Serialize(watchedFiles, SerializerOptions);
+        var json = JsonSerializer.Serialize(watchedFiles, WatchlistJsonContext.Default.ListWatchedFile);
         File.WriteAllText(_filePath, json);
     }
 }

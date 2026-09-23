@@ -1,0 +1,59 @@
+# Builds IniAnchor and creates a GitHub release whenever a version tag (e.g. v1.0.0) is pushed.
+#
+# How to release:  git tag v1.0.0   then   git push origin v1.0.0
+# The release is created as a DRAFT: open it on GitHub (Releases), check the notes, download
+# and test the .exe, then click "Publish release".
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # needed to create the release and upload the .exe
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out the tagged code
+        uses: actions/checkout@v4
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x' # same SDK major version used locally; still targets net8.0
+
+      - name: Run Core tests
+        run: dotnet test IniAnchor.Core.Tests/IniAnchor.Core.Tests.csproj -c Release
+
+      - name: Work out version from tag
+        shell: pwsh
+        # "v1.2.3" -> "1.2.3", written into the .exe's file version info
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Publish the app
+        run: >
+          dotnet publish IniAnchor.App/IniAnchor.App.csproj
+          -c Release -r win-x64 -p:Platform=x64
+          --self-contained true -p:PublishSingleFile=true -p:WindowsAppSDKSelfContained=true
+          -p:Version=${{ env.VERSION }}
+
+      - name: Rename the .exe
+        shell: pwsh
+        run: Copy-Item IniAnchor.App/bin/win-x64/publish/IniAnchor.App.exe "IniAnchor-${{ github.ref_name }}-win-x64.exe"
+
+      - name: Create draft release with the .exe attached
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: IniAnchor ${{ github.ref_name }}
+          files: IniAnchor-${{ github.ref_name }}-win-x64.exe
+          body: |
+            Portable Windows app: a single .exe, nothing to install. Download it, put it in any folder and double-click it. Your watch list is saved as `watchlist.json` next to the .exe.
+
+            **Windows SmartScreen note:** the .exe isn't code-signed, so on first launch Windows may show "Windows protected your PC". Click **More info → Run anyway**.
