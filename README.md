@@ -1,11 +1,11 @@
 # IniAnchor
 
-A small Windows desktop app for keeping specific values in `.ini` files pinned to what you want them to be — add the files you care about, pick the keys, set the values you want, and apply them whenever you need to.
+A lightweight Windows desktop app for keeping specific values in `.ini` files pinned to what you want them to be — add the files you care about, pick the keys, set the values you want, and apply them whenever you need to.
 
 ## Future Goals (for now)
 
-- **Improve UX** Improve user interaction logic and flow.
-- **Improve UI** Improve visual structure of how elements are presented.
+- **Improve UX**: User interaction logic and flow.
+- **Improve UI**: Visual structure of how elements are presented.
 
 ## Features
 
@@ -48,8 +48,6 @@ You can also publish from Visual Studio itself: right-click `IniAnchor.App` → 
 - **`IniAnchor.Core`** — the actual `.ini` parsing, uniqueness checking, safe writing, and apply-pipeline logic. Plain C#, no UI dependencies, fully unit tested.
 - **`IniAnchor.App`** — the WinUI 3 desktop app (views, view models).
 - **`IniAnchor.Core.Tests`** — unit tests for `IniAnchor.Core` (xUnit).
-
-See `ARCHITECTURE.md` for the full design notes and detailed progress log.
 
 ## What it doesn't do (yet)
 
