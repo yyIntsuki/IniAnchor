@@ -37,15 +37,19 @@ jobs:
           "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Publish the app
+        # -o sets the output folder explicitly: the .pubxml publish profiles are not in the
+        # repository (the standard VS .gitignore excludes *.pubxml), so the build machine can't
+        # use them. All settings they contained are passed here or set in the csproj.
         run: >
           dotnet publish IniAnchor.App/IniAnchor.App.csproj
           -c Release -r win-x64 -p:Platform=x64
           --self-contained true -p:PublishSingleFile=true -p:WindowsAppSDKSelfContained=true
           -p:Version=${{ env.VERSION }}
+          -o release-output
 
       - name: Rename the .exe
         shell: pwsh
-        run: Copy-Item IniAnchor.App/bin/win-x64/publish/IniAnchor.App.exe "IniAnchor-${{ github.ref_name }}-win-x64.exe"
+        run: Copy-Item release-output/IniAnchor.App.exe "IniAnchor-${{ github.ref_name }}-win-x64.exe"
 
       - name: Create draft release with the .exe attached
         uses: softprops/action-gh-release@v2
