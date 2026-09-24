@@ -85,7 +85,11 @@ public partial class MainViewModel : ObservableObject
     private const string NoKeysHint = "No keys watched in this file yet. Click 'Add key...' to get started.";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLastApplyMessage))]
     private string _lastApplyMessage = string.Empty;
+
+    /// <summary>Hides the empty status line so it doesn't leave a gap under the apply buttons.</summary>
+    public bool HasLastApplyMessage => !string.IsNullOrEmpty(LastApplyMessage);
 
     // Stores watchlist.json next to the actual .exe (the portable "copy the folder" goal, §3.5).
     // Deliberately NOT WatchlistStore's AppContext.BaseDirectory default: in the published

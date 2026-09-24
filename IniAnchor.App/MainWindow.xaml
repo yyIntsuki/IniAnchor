@@ -8,13 +8,13 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    Title="IniAnchor.App">
+    Title="IniAnchor">
 
     <Window.SystemBackdrop>
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid Padding="16" RowSpacing="12">
+    <Grid x:Name="RootGrid">
         <Grid.Resources>
             <!-- Shared by all lists: the row fills the whole item (no default padding), so
                  hovering anywhere on it shows its buttons, and the buttons sit at the right edge. -->
@@ -26,21 +26,33 @@
         </Grid.Resources>
 
         <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0" ColumnSpacing="16">
+        <!-- Custom title bar: the app draws into the title bar area (ExtendsContentIntoTitleBar
+             in code-behind), so it has the same Mica background as the rest of the window
+             instead of a separate white bar. This row is the drag region; the system still
+             draws minimize/maximize/close on the right. -->
+        <Grid x:Name="AppTitleBar" Height="48" Padding="16,0,0,0">
+            <TextBlock Text="IniAnchor"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource CaptionTextBlockStyle}" />
+        </Grid>
+
+        <Grid Grid.Row="1" Padding="16,0,16,16" ColumnSpacing="16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="200" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Sidebar: folders. "All" is always first and has no rename/delete buttons. -->
+            <!-- Sidebar: folders, and at the bottom the apply buttons + status line (kept here,
+                 not in a full-width bottom bar, so the keys panel can use the full window height). -->
             <Grid Grid.Column="0" RowSpacing="8">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
@@ -90,12 +102,48 @@
                         </DataTemplate>
                     </ListView.ItemTemplate>
                 </ListView>
+
+                <!-- Status line + apply buttons in one row. The status line sits above the
+                     buttons (so the buttons stay at the bottom) and is collapsed while empty,
+                     so it leaves no gap. -->
+                <StackPanel Grid.Row="2" Spacing="8">
+                    <!-- Status line: apply summary or errors -->
+                    <TextBlock Text="{x:Bind ViewModel.LastApplyMessage, Mode=OneWay}"
+                               Visibility="{x:Bind ViewModel.HasLastApplyMessage, Mode=OneWay}"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               TextWrapping="Wrap"
+                               MaxLines="4"
+                               TextTrimming="CharacterEllipsis"
+                               Opacity="0.8" />
+
+                    <!-- "Apply folder" gets the width its text needs (an even split of the 200px
+                         sidebar cut it off); "Apply all" fills the rest. -->
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button Content="Apply folder"
+                                IsEnabled="{x:Bind ViewModel.HasUserFolderSelected, Mode=OneWay}"
+                                Click="ApplyFolderButton_Click"
+                                ToolTipService.ToolTip="Apply only the selected folder's entries" />
+                        <Button Grid.Column="1"
+                                Content="Apply all"
+                                HorizontalAlignment="Stretch"
+                                Style="{StaticResource AccentButtonStyle}"
+                                Click="ApplyAllButton_Click"
+                                ToolTipService.ToolTip="Apply every entry in every folder" />
+                    </Grid>
+                </StackPanel>
             </Grid>
 
             <!-- Content area: the file list, with the keys panel flying in over it from the right. -->
             <Grid x:Name="ContentArea" Grid.Column="1">
 
-                <!-- File entries of the selected folder -->
+                <!-- File entries of the selected folder. Same background and padding as the
+                     keys panel, so both look alike and line up exactly when it slides over. -->
+                <Border Padding="12"
+                        Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
                 <Grid RowSpacing="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -115,26 +163,28 @@
                                   KeyDown="List_KeyDown">
                             <ListView.ItemTemplate>
                                 <DataTemplate x:DataType="vm:WatchedFileViewModel">
-                                    <Grid Padding="12,0,4,0" ColumnSpacing="4"
+                                    <!-- Path left, folder name (only in "All") right-aligned on the same line.
+                                         Button columns have fixed widths so nothing shifts on hover. -->
+                                    <Grid Padding="12,0,4,0" ColumnSpacing="8"
                                           Background="Transparent"
                                           PointerEntered="Row_PointerEntered"
                                           PointerExited="Row_PointerExited">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="32" />
+                                            <ColumnDefinition Width="32" />
                                         </Grid.ColumnDefinitions>
-                                        <StackPanel VerticalAlignment="Center">
-                                            <TextBlock Text="{x:Bind FilePath}"
-                                                       TextTrimming="CharacterEllipsis" />
-                                            <!-- Only in "All": which folder this entry belongs to -->
-                                            <TextBlock Text="{x:Bind FolderName, Mode=OneWay}"
-                                                       Visibility="{x:Bind ShowFolderName, Mode=OneWay}"
-                                                       Style="{StaticResource CaptionTextBlockStyle}"
-                                                       Opacity="0.6"
-                                                       TextTrimming="CharacterEllipsis" />
-                                        </StackPanel>
-                                        <Button Grid.Column="1"
+                                        <TextBlock Text="{x:Bind FilePath}"
+                                                   VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{x:Bind FolderName, Mode=OneWay}"
+                                                   Visibility="{x:Bind ShowFolderName, Mode=OneWay}"
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   VerticalAlignment="Center"
+                                                   Opacity="0.6" />
+                                        <Button Grid.Column="2"
                                                 Width="32" Height="32" Padding="0"
                                                 VerticalAlignment="Center"
                                                 Visibility="{x:Bind IsHovered, Mode=OneWay}"
@@ -143,7 +193,7 @@
                                             <FontIcon Glyph="&#xE70F;" FontSize="14" />
                                         </Button>
                                         <!-- Remove is always the rightmost button -->
-                                        <Button Grid.Column="2"
+                                        <Button Grid.Column="3"
                                                 Width="32" Height="32" Padding="0"
                                                 VerticalAlignment="Center"
                                                 Visibility="{x:Bind IsHovered, Mode=OneWay}"
@@ -162,17 +212,16 @@
                                    Opacity="0.6" IsHitTestVisible="False" />
                     </Grid>
                 </Grid>
+                </Border>
 
                 <!-- Keys panel: covers the file list while an entry is selected. Shown/hidden
                      (with a slide animation) by code-behind when HasSelectedFile changes;
                      closing it just clears the selected entry. Opaque background so the file
-                     list doesn't show through. -->
+                     list doesn't show through; square corners, since rounded ones let the
+                     "Add ini file..." button underneath peek through at the top-left. -->
                 <Border x:Name="KeysPanel"
                         Visibility="Collapsed"
                         Padding="12"
-                        CornerRadius="8"
-                        BorderThickness="1"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                         Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
                     <Border.RenderTransform>
                         <TranslateTransform x:Name="KeysPanelTransform" />
@@ -196,23 +245,37 @@
                                     IsEnabled="{x:Bind ViewModel.HasSelectedFile, Mode=OneWay}"
                                     Click="AddKeyButton_Click" />
 
-                            <!-- Switch between the folder's entries without closing the panel -->
+                            <!-- Switch between the folder's entries without closing the panel.
+                                 One line per entry (path left, folder name right), so the header
+                                 keeps the same height. Stretch so the folder name can right-align. -->
                             <ComboBox Grid.Column="1"
                                       HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
                                       ItemsSource="{x:Bind ViewModel.VisibleFiles}"
                                       SelectedItem="{x:Bind ViewModel.SelectedFile, Mode=TwoWay}"
                                       ToolTipService.ToolTip="Switch ini file entry">
+                                <ComboBox.ItemContainerStyle>
+                                    <Style TargetType="ComboBoxItem" BasedOn="{StaticResource DefaultComboBoxItemStyle}">
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    </Style>
+                                </ComboBox.ItemContainerStyle>
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate x:DataType="vm:WatchedFileViewModel">
-                                        <StackPanel>
+                                        <Grid ColumnSpacing="8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
                                             <TextBlock Text="{x:Bind FilePath}"
+                                                       VerticalAlignment="Center"
                                                        TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Text="{x:Bind FolderName, Mode=OneWay}"
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{x:Bind FolderName, Mode=OneWay}"
                                                        Visibility="{x:Bind ShowFolderName, Mode=OneWay}"
                                                        Style="{StaticResource CaptionTextBlockStyle}"
-                                                       Opacity="0.6"
-                                                       TextTrimming="CharacterEllipsis" />
-                                        </StackPanel>
+                                                       VerticalAlignment="Center"
+                                                       Opacity="0.6" />
+                                        </Grid>
                                     </DataTemplate>
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
@@ -233,16 +296,17 @@
                                       KeyDown="List_KeyDown">
                                 <ListView.ItemTemplate>
                                     <DataTemplate x:DataType="vm:WatchedKeyViewModel">
-                                        <!-- Key name on the left; everything else right-aligned. The icon
-                                             and button columns have fixed widths, so value boxes line up
-                                             across rows and don't shift when hover buttons appear. -->
+                                        <!-- Key name on the left; everything else right-aligned. Name and
+                                             value box split the flexible space equally (the box gets about
+                                             half the row). Icon and button columns have fixed widths, so
+                                             value boxes line up across rows and don't shift on hover. -->
                                         <Grid Padding="12,0,4,0" ColumnSpacing="8"
                                               Background="Transparent"
                                               PointerEntered="Row_PointerEntered"
                                               PointerExited="Row_PointerExited">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="20" />
                                                 <ColumnDefinition Width="20" />
                                                 <ColumnDefinition Width="32" />
@@ -253,7 +317,7 @@
                                                        TextTrimming="CharacterEllipsis" />
                                             <TextBox Grid.Column="1"
                                                      Text="{x:Bind DesiredValue, Mode=TwoWay}"
-                                                     Width="160"
+                                                     HorizontalAlignment="Stretch"
                                                      VerticalAlignment="Center"
                                                      LostFocus="DesiredValueBox_LostFocus" />
                                             <!-- Status on disk: one icon, name on hover. Only one is visible at a time. -->
@@ -309,20 +373,5 @@
                 </Border>
             </Grid>
         </Grid>
-
-        <!-- Bottom: apply the selected folder, or everything -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12">
-            <Button Content="Apply folder"
-                    IsEnabled="{x:Bind ViewModel.HasUserFolderSelected, Mode=OneWay}"
-                    Click="ApplyFolderButton_Click"
-                    ToolTipService.ToolTip="Apply only the selected folder's entries" />
-            <Button Content="Apply all"
-                    Style="{StaticResource AccentButtonStyle}"
-                    Click="ApplyAllButton_Click"
-                    ToolTipService.ToolTip="Apply every entry in every folder" />
-            <TextBlock Text="{x:Bind ViewModel.LastApplyMessage, Mode=OneWay}"
-                       VerticalAlignment="Center"
-                       Opacity="0.8" />
-        </StackPanel>
     </Grid>
 </Window>

@@ -32,8 +32,29 @@ namespace IniAnchor.App
         {
             InitializeComponent();
 
+            // Draw the app into the title bar area so it shares the window's Mica background
+            // instead of a separate white bar. AppTitleBar (XAML) is the drag region; "Tall"
+            // makes the system's caption buttons match its 48px height.
+            ExtendsContentIntoTitleBar = true;
+            SetTitleBar(AppTitleBar);
+            AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
+
             RestoreWindowSize();
             AppWindow.Closing += (_, _) => SaveWindowSize();
+
+            // Minimum size needs the display scale, which is only known once content is loaded.
+            // Re-applied on XamlRoot.Changed, which also fires when the window moves to a
+            // display with different scaling.
+            RootGrid.Loaded += (_, _) =>
+            {
+                ApplyMinimumWindowSize();
+
+                // No saved size (e.g. first launch): start at exactly the minimum size.
+                if (!_restoredSavedSize)
+                    AppWindow.Resize(MinimumWindowSize());
+
+                RootGrid.XamlRoot.Changed += (_, _) => ApplyMinimumWindowSize();
+            };
 
             // The keys panel opens/closes with the selected entry (see SetKeysPanelOpen).
             ViewModel.PropertyChanged += (_, e) =>
@@ -91,6 +112,41 @@ namespace IniAnchor.App
             ViewModel.SelectedFile = null;
         }
 
+        // --- Minimum window size ---
+        // In effective (DPI-independent) pixels, so it looks the same at 100% or 150% scaling.
+
+        private const int MinWindowWidth = 1000;
+        private const int MinWindowHeight = 600;
+
+        // PreferredMinimumWidth/Height and AppWindow sizes are physical pixels, and Windows
+        // doesn't rescale the minimum for display scaling (known WinUI issue), so convert here.
+        private SizeInt32 MinimumWindowSize()
+        {
+            var scale = RootGrid.XamlRoot?.RasterizationScale ?? 1.0;
+            return new SizeInt32(
+                (int)Math.Ceiling(MinWindowWidth * scale),
+                (int)Math.Ceiling(MinWindowHeight * scale));
+        }
+
+        private void ApplyMinimumWindowSize()
+        {
+            if (AppWindow.Presenter is not OverlappedPresenter presenter)
+                return;
+
+            var min = MinimumWindowSize();
+            presenter.PreferredMinimumWidth = min.Width;
+            presenter.PreferredMinimumHeight = min.Height;
+
+            // Grow a window that's currently smaller, e.g. from an old saved size.
+            // Skipped while maximized/minimized.
+            if (presenter.State != OverlappedPresenterState.Restored)
+                return;
+
+            var size = AppWindow.Size;
+            if (size.Width < min.Width || size.Height < min.Height)
+                AppWindow.Resize(new SizeInt32(Math.Max(size.Width, min.Width), Math.Max(size.Height, min.Height)));
+        }
+
         // --- Remembered window size ---
         // Stored in settings.json next to the .exe, like watchlist.json (portable, §3.5).
 
@@ -106,8 +162,12 @@ namespace IniAnchor.App
                 width >= 400 && height >= 300) // ignore nonsense/tiny values
             {
                 AppWindow.Resize(new SizeInt32(width, height));
+                _restoredSavedSize = true;
             }
         }
+
+        // False when there was no saved size - the window then starts at the minimum size.
+        private bool _restoredSavedSize;
 
         private void SaveWindowSize()
         {
