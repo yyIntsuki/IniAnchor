@@ -19,10 +19,9 @@ public class WatchedKey
     public string DesiredValue { get; set; } = string.Empty;
 
     /// <summary>
-    /// The value that was actually written the last time Apply succeeded for this key.
-    /// Null if it has never been applied.
+    /// The value the key had in the file when it was added to the watch list. Never changes
+    /// afterwards, so the user can always revert DesiredValue back to it. Null for keys
+    /// added before this was recorded.
     /// </summary>
-    public string? LastAppliedValue { get; set; }
-
-    public DateTime? LastAppliedAtUtc { get; set; }
+    public string? OriginalValue { get; set; }
 }

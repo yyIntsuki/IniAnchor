@@ -48,20 +48,6 @@ public class ApplyRunnerTests : IDisposable
     }
 
     [Fact]
-    public void Applying_sets_LastAppliedValue_and_LastAppliedAtUtc()
-    {
-        var path = WriteSampleFile(SampleIni);
-        var key = new WatchedKey { Section = "General", KeyName = "Name", DesiredValue = "Grace" };
-        var file = new WatchedFile { FilePath = path, WatchedKeys = { key } };
-        var fixedTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-
-        ApplyRunner.ApplyToFile(file, fixedTime);
-
-        Assert.Equal("Grace", key.LastAppliedValue);
-        Assert.Equal(fixedTime, key.LastAppliedAtUtc);
-    }
-
-    [Fact]
     public void Missing_key_is_reported_as_NotFound_and_nothing_is_written_for_it()
     {
         var path = WriteSampleFile(SampleIni);
@@ -73,7 +59,6 @@ public class ApplyRunnerTests : IDisposable
 
         Assert.Equal(ApplyKeyOutcome.NotFound, Assert.Single(result.KeyResults).Outcome);
         Assert.False(result.AnyApplied);
-        Assert.Null(key.LastAppliedValue);
         Assert.Equal(originalContents, File.ReadAllText(path)); // untouched - no write happened at all
     }
 
@@ -155,5 +140,160 @@ public class ApplyRunnerTests : IDisposable
         Assert.Equal(2, results.Count);
         Assert.Contains("Name = One", File.ReadAllText(path1));
         Assert.Contains("Name = Two", File.ReadAllText(path2));
+    }
+
+    [Fact]
+    public void Key_already_at_desired_value_is_AlreadySet_and_file_is_not_rewritten()
+    {
+        var path = WriteSampleFile(SampleIni);
+        var oldTimestamp = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(path, oldTimestamp);
+        var key = new WatchedKey { Section = "General", KeyName = "Name", DesiredValue = "Ada" };
+        var file = new WatchedFile { FilePath = path, WatchedKeys = { key } };
+
+        var result = ApplyRunner.ApplyToFile(file);
+
+        Assert.Null(result.FileErrorMessage);
+        Assert.False(result.AnyApplied);
+        Assert.Equal(ApplyKeyOutcome.AlreadySet, Assert.Single(result.KeyResults).Outcome);
+        Assert.Equal(oldTimestamp, File.GetLastWriteTimeUtc(path)); // no write happened at all
+        Assert.Equal(SampleIni, File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void Read_only_file_that_is_already_correct_gives_no_FileError()
+    {
+        var path = WriteSampleFile(SampleIni);
+        File.SetAttributes(path, FileAttributes.ReadOnly);
+        var key = new WatchedKey { Section = "General", KeyName = "Name", DesiredValue = "Ada" };
+        var file = new WatchedFile { FilePath = path, WatchedKeys = { key } };
+
+        try
+        {
+            var result = ApplyRunner.ApplyToFile(file);
+
+            Assert.Null(result.FileErrorMessage);
+            Assert.Equal(ApplyKeyOutcome.AlreadySet, Assert.Single(result.KeyResults).Outcome);
+        }
+        finally
+        {
+            File.SetAttributes(path, FileAttributes.Normal); // so Dispose can delete it
+        }
+    }
+
+    [Fact]
+    public void Mix_of_changed_and_already_set_keys_writes_file_and_reports_each_correctly()
+    {
+        var path = WriteSampleFile(SampleIni);
+        var changedKey = new WatchedKey { Section = "General", KeyName = "Name", DesiredValue = "Grace" };
+        var sameKey = new WatchedKey { Section = "General", KeyName = "Enabled", DesiredValue = "true" };
+        var file = new WatchedFile { FilePath = path, WatchedKeys = { changedKey, sameKey } };
+
+        var result = ApplyRunner.ApplyToFile(file);
+
+        Assert.Contains(result.KeyResults, r => r.Key == changedKey && r.Outcome == ApplyKeyOutcome.Applied);
+        Assert.Contains(result.KeyResults, r => r.Key == sameKey && r.Outcome == ApplyKeyOutcome.AlreadySet);
+        var contents = File.ReadAllText(path);
+        Assert.Contains("Name = Grace", contents);
+        Assert.Contains("Enabled=true", contents);
+    }
+
+    // --- Several entries for the same file (same ini file in several folders) ---
+
+    private static WatchedFile EntryFor(string path, params (string Key, string Value)[] keys) => new()
+    {
+        FilePath = path,
+        WatchedKeys = keys.Select(k => new WatchedKey { Section = "General", KeyName = k.Key, DesiredValue = k.Value }).ToList()
+    };
+
+    [Fact]
+    public void Same_file_conflicting_key_last_entry_wins_and_earlier_is_Overridden()
+    {
+        var path = WriteSampleFile(SampleIni);
+        var upper = EntryFor(path, ("Name", "Upper"));
+        var lower = EntryFor(path, ("Name", "Lower"));
+
+        var results = ApplyRunner.ApplyToAll(new[] { upper, lower });
+
+        Assert.Equal(ApplyKeyOutcome.Overridden, Assert.Single(results[0].KeyResults).Outcome);
+        Assert.Equal(ApplyKeyOutcome.Applied, Assert.Single(results[1].KeyResults).Outcome);
+        Assert.Contains("Name = Lower", File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void Same_file_same_value_in_both_entries_is_not_Overridden()
+    {
+        var path = WriteSampleFile(SampleIni);
+        var upper = EntryFor(path, ("Name", "Grace"));
+        var lower = EntryFor(path, ("Name", "Grace"));
+
+        var results = ApplyRunner.ApplyToAll(new[] { upper, lower });
+
+        Assert.Equal(ApplyKeyOutcome.Applied, Assert.Single(results[0].KeyResults).Outcome);
+        Assert.Equal(ApplyKeyOutcome.Applied, Assert.Single(results[1].KeyResults).Outcome);
+        Assert.Contains("Name = Grace", File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void Same_file_conflict_where_winner_already_matches_leaves_file_untouched()
+    {
+        var path = WriteSampleFile(SampleIni);
+        var oldTimestamp = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(path, oldTimestamp);
+        var upper = EntryFor(path, ("Name", "Grace"));
+        var lower = EntryFor(path, ("Name", "Ada")); // Ada is already in the file
+
+        var results = ApplyRunner.ApplyToAll(new[] { upper, lower });
+
+        Assert.Equal(ApplyKeyOutcome.Overridden, Assert.Single(results[0].KeyResults).Outcome);
+        Assert.Equal(ApplyKeyOutcome.AlreadySet, Assert.Single(results[1].KeyResults).Outcome);
+        Assert.Equal(oldTimestamp, File.GetLastWriteTimeUtc(path)); // the losing value never caused a write
+        Assert.Equal(SampleIni, File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void Same_file_different_keys_from_two_entries_are_both_written()
+    {
+        var path = WriteSampleFile(SampleIni);
+        var first = EntryFor(path, ("Name", "Grace"));
+        var second = EntryFor(path, ("Enabled", "false"));
+
+        var results = ApplyRunner.ApplyToAll(new[] { first, second });
+
+        Assert.Equal(ApplyKeyOutcome.Applied, Assert.Single(results[0].KeyResults).Outcome);
+        Assert.Equal(ApplyKeyOutcome.Applied, Assert.Single(results[1].KeyResults).Outcome);
+        var contents = File.ReadAllText(path);
+        Assert.Contains("Name = Grace", contents);
+        Assert.Contains("Enabled=false", contents);
+    }
+
+    [Fact]
+    public void Same_file_that_cannot_be_read_gives_FileError_for_every_entry()
+    {
+        var path = Path.Combine(_tempDir.FullName, "does-not-exist.ini");
+        var first = EntryFor(path, ("Name", "x"));
+        var second = EntryFor(path, ("Enabled", "y"));
+
+        var results = ApplyRunner.ApplyToAll(new[] { first, second });
+
+        Assert.All(results, r =>
+        {
+            Assert.NotNull(r.FileErrorMessage);
+            Assert.Equal(ApplyKeyOutcome.FileError, Assert.Single(r.KeyResults).Outcome);
+        });
+    }
+
+    [Fact]
+    public void ApplyToAll_returns_one_result_per_entry_in_input_order()
+    {
+        var pathA = WriteSampleFile(SampleIni);
+        var pathB = WriteSampleFile(SampleIni);
+        var a1 = EntryFor(pathA, ("Name", "A1"));
+        var b = EntryFor(pathB, ("Name", "B"));
+        var a2 = EntryFor(pathA, ("Enabled", "false"));
+
+        var results = ApplyRunner.ApplyToAll(new[] { a1, b, a2 });
+
+        Assert.Equal(new[] { a1, b, a2 }, results.Select(r => r.File));
     }
 }

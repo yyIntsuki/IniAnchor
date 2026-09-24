@@ -10,6 +10,18 @@ public enum ApplyKeyOutcome
     /// <summary>The key was unique in its section and its value was written.</summary>
     Applied,
 
+    /// <summary>
+    /// The key was unique and already had the desired value, so nothing was written for it.
+    /// If every key in a file is AlreadySet (or skipped), the file isn't written at all.
+    /// </summary>
+    AlreadySet,
+
+    /// <summary>
+    /// Another entry for the same file (a folder lower in the sidebar) sets this key to a
+    /// different value, and that one wins - nothing was written for this key.
+    /// </summary>
+    Overridden,
+
     /// <summary>The key wasn't found in the file - nothing was written for it (§3.3).</summary>
     NotFound,
 

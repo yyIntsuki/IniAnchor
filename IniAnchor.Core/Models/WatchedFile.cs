@@ -9,10 +9,11 @@ public class WatchedFile
 
     public string FilePath { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Optional friendly label shown in the UI instead of the raw path.
-    /// </summary>
-    public string? DisplayName { get; set; }
-
     public List<WatchedKey> WatchedKeys { get; set; } = new();
+
+    /// <summary>
+    /// The <see cref="WatchFolder"/> this entry belongs to, or null for an entry without a
+    /// folder (added while "All" was selected - only shows in "All").
+    /// </summary>
+    public Guid? FolderId { get; set; }
 }

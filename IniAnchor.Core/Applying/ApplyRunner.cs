@@ -4,94 +4,158 @@ using IniAnchor.Core.Parsing;
 namespace IniAnchor.Core.Applying;
 
 /// <summary>
-/// Runs the Apply pipeline described in §5: for each watched file, one read, one index
-/// build (inside IniDocument), N lookups, and - if anything is actually eligible to
-/// write - one write. Never re-reads or re-writes a file per key.
+/// Runs the Apply pipeline described in §5. Entries for the same ini file (the same file
+/// in several folders) are merged first, so each file gets one read, one index build
+/// (inside IniDocument), N lookups, and - only if at least one value actually differs -
+/// one write. Never re-reads or re-writes a file per key or per entry.
+///
+/// When several entries set the same key, the LAST entry in the given order wins (callers
+/// pass Watchlist.FilesInApplyOrder, so that's the folder lowest in the sidebar). Losing
+/// keys with a different value are reported as <see cref="ApplyKeyOutcome.Overridden"/>.
 /// </summary>
 public static class ApplyRunner
 {
-    public static List<ApplyFileResult> ApplyToAll(IEnumerable<WatchedFile> files) =>
-        files.Select(f => ApplyToFile(f)).ToList();
-
-    public static ApplyFileResult ApplyToFile(WatchedFile file, DateTime? appliedAtUtc = null)
+    /// <summary>Applies every entry; returns one result per entry, in the given order.</summary>
+    public static List<ApplyFileResult> ApplyToAll(IEnumerable<WatchedFile> files)
     {
-        appliedAtUtc ??= DateTime.UtcNow;
+        var entries = files.ToList();
 
-        if (file.WatchedKeys.Count == 0)
-            return new ApplyFileResult(file, new List<ApplyKeyResult>(), null);
+        var resultByEntry = new Dictionary<WatchedFile, ApplyFileResult>();
+
+        // GroupBy keeps the original order within each group, so "last wins" still means
+        // "lowest in the sidebar".
+        foreach (var sameFile in entries.GroupBy(f => f.FilePath, StringComparer.OrdinalIgnoreCase))
+        {
+            foreach (var result in ApplyToSameFile(sameFile.ToList()))
+                resultByEntry[result.File] = result;
+        }
+
+        return entries.Select(e => resultByEntry[e]).ToList();
+    }
+
+    /// <summary>Applies a single entry (the one-entry case of <see cref="ApplyToAll"/>).</summary>
+    public static ApplyFileResult ApplyToFile(WatchedFile file) =>
+        ApplyToSameFile(new List<WatchedFile> { file })[0];
+
+    /// <summary>All given entries point at the same ini file.</summary>
+    private static List<ApplyFileResult> ApplyToSameFile(List<WatchedFile> entries)
+    {
+        var filePath = entries[0].FilePath;
+
+        if (entries.All(e => e.WatchedKeys.Count == 0))
+            return entries.Select(e => new ApplyFileResult(e, new List<ApplyKeyResult>(), null)).ToList();
 
         IniDocument document;
         try
         {
-            document = IniParser.ParseFile(file.FilePath);
+            document = IniParser.ParseFile(filePath);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Can't even read the file - every key for it is a file-level failure.
-            var errorResults = file.WatchedKeys
-                .Select(k => new ApplyKeyResult(k, ApplyKeyOutcome.FileError))
-                .ToList();
-            return new ApplyFileResult(file, errorResults, ex.Message);
+            // Can't even read the file - every key of every entry is a file-level failure.
+            return entries.Select(e => new ApplyFileResult(e,
+                e.WatchedKeys.Select(k => new ApplyKeyResult(k, ApplyKeyOutcome.FileError)).ToList(),
+                ex.Message)).ToList();
         }
 
-        // Step 2-3 of §5: one lookup per key (uses IniDocument's cached index), staging
-        // value changes in memory without touching disk yet.
-        var keyResults = new List<ApplyKeyResult>();
+        // Pass 1: one lookup per key (uses IniDocument's cached index). For every line that
+        // a key matches uniquely, remember which key wins: the last one, since later
+        // entries overwrite earlier ones in this dictionary.
+        var lookups = new List<(WatchedFile Entry, WatchedKey Key, KeyLookupResult Lookup)>();
+        var winnerByLine = new Dictionary<int, WatchedKey>();
+
+        foreach (var entry in entries)
+        {
+            foreach (var key in entry.WatchedKeys)
+            {
+                var lookup = document.LookupKey(key.Section, key.KeyName);
+                lookups.Add((entry, key, lookup));
+
+                if (lookup.Status == KeyLookupStatus.UniqueMatch)
+                    winnerByLine[lookup.MatchingLineIndices[0]] = key;
+            }
+        }
+
+        // Pass 2: stage each winning value in memory, but only if it actually differs.
+        // Exact comparison, same as IniLine.SetValue. If nothing differs, the file isn't
+        // written at all - so its timestamp is untouched, file watchers aren't triggered,
+        // and a locked/read-only file that's already correct doesn't produce a FileError.
+        var outcomeByLine = new Dictionary<int, ApplyKeyOutcome>();
         var anyStaged = false;
 
-        foreach (var key in file.WatchedKeys)
+        foreach (var (lineIndex, winner) in winnerByLine)
         {
-            var lookup = document.LookupKey(key.Section, key.KeyName);
+            if (document.Lines[lineIndex].Value == winner.DesiredValue)
+            {
+                outcomeByLine[lineIndex] = ApplyKeyOutcome.AlreadySet;
+            }
+            else
+            {
+                document.SetValueAtLine(lineIndex, winner.DesiredValue);
+                outcomeByLine[lineIndex] = ApplyKeyOutcome.Applied;
+                anyStaged = true;
+            }
+        }
+
+        // Pass 3: every key's outcome. A losing key with the same value as the winner shares
+        // the winner's outcome (its value is what ends up in the file); a different value
+        // is Overridden.
+        var keyResultsByEntry = entries.ToDictionary(e => e, _ => new List<ApplyKeyResult>());
+
+        foreach (var (entry, key, lookup) in lookups)
+        {
+            ApplyKeyOutcome outcome;
 
             switch (lookup.Status)
             {
                 case KeyLookupStatus.UniqueMatch:
-                    document.SetValueAtLine(lookup.MatchingLineIndices[0], key.DesiredValue);
-                    keyResults.Add(new ApplyKeyResult(key, ApplyKeyOutcome.Applied));
-                    anyStaged = true;
+                    var lineIndex = lookup.MatchingLineIndices[0];
+                    var winner = winnerByLine[lineIndex];
+                    outcome = winner == key || winner.DesiredValue == key.DesiredValue
+                        ? outcomeByLine[lineIndex]
+                        : ApplyKeyOutcome.Overridden;
                     break;
 
                 case KeyLookupStatus.NotFound:
-                    keyResults.Add(new ApplyKeyResult(key, ApplyKeyOutcome.NotFound));
+                    outcome = ApplyKeyOutcome.NotFound;
                     break;
 
                 case KeyLookupStatus.DuplicateMatches:
                 default:
-                    keyResults.Add(new ApplyKeyResult(key, ApplyKeyOutcome.DuplicateMatches));
+                    outcome = ApplyKeyOutcome.DuplicateMatches;
                     break;
             }
+
+            keyResultsByEntry[entry].Add(new ApplyKeyResult(key, outcome));
         }
 
-        if (!anyStaged)
-            return new ApplyFileResult(file, keyResults, null);
+        List<ApplyFileResult> Results(string? errorMessage) =>
+            entries.Select(e => new ApplyFileResult(e, keyResultsByEntry[e], errorMessage)).ToList();
 
-        // Step 4 of §5: one write for the whole file, regardless of how many keys changed.
+        if (!anyStaged)
+            return Results(null);
+
+        // One write for the whole file, however many keys and entries changed.
         try
         {
-            IniWriter.WriteToFile(document, file.FilePath);
+            IniWriter.WriteToFile(document, filePath);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // The write itself failed - nothing was actually persisted, so downgrade every
             // "Applied" result (they were only staged in memory) to a file error.
-            var downgraded = keyResults
-                .Select(r => r.Outcome == ApplyKeyOutcome.Applied
-                    ? new ApplyKeyResult(r.Key, ApplyKeyOutcome.FileError)
-                    : r)
-                .ToList();
-            return new ApplyFileResult(file, downgraded, ex.Message);
+            foreach (var entry in entries)
+            {
+                keyResultsByEntry[entry] = keyResultsByEntry[entry]
+                    .Select(r => r.Outcome == ApplyKeyOutcome.Applied
+                        ? new ApplyKeyResult(r.Key, ApplyKeyOutcome.FileError)
+                        : r)
+                    .ToList();
+            }
+
+            return Results(ex.Message);
         }
 
-        // Write succeeded - record what was actually applied (§3.1's LastAppliedValue/AtUtc).
-        foreach (var result in keyResults)
-        {
-            if (result.Outcome != ApplyKeyOutcome.Applied)
-                continue;
-
-            result.Key.LastAppliedValue = result.Key.DesiredValue;
-            result.Key.LastAppliedAtUtc = appliedAtUtc;
-        }
-
-        return new ApplyFileResult(file, keyResults, null);
+        return Results(null);
     }
 }

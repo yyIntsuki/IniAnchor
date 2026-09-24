@@ -24,14 +24,22 @@ public partial class WatchedFileViewModel : ObservableObject
             model.WatchedKeys.Select(k => new WatchedKeyViewModel(k)));
     }
 
-    /// <summary>What the file list shows: the friendly name if set, otherwise the raw path.</summary>
-    public string DisplayText => string.IsNullOrWhiteSpace(Model.DisplayName) ? Model.FilePath : Model.DisplayName!;
-
     public string FilePath => Model.FilePath;
 
     /// <summary>True while the pointer is over this file's row - shows the row's "open" button.</summary>
     [ObservableProperty]
     private bool _isHovered;
+
+    /// <summary>Name of the folder this entry belongs to; null for an entry without a folder.</summary>
+    [ObservableProperty]
+    private string? _folderName;
+
+    /// <summary>
+    /// Shows <see cref="FolderName"/> under the path - only in the "All" view, where entries
+    /// from different folders (possibly for the same ini file) are listed together.
+    /// </summary>
+    [ObservableProperty]
+    private bool _showFolderName;
 
     /// <summary>
     /// Re-parses the file on disk and updates every watched key's Status (unique/not-found/

@@ -8,6 +8,7 @@ using IniAnchor.App.ViewModels;
 // published app throws a NullReferenceException inside CsWinRT when setting ItemsSource, and the
 // list silently stays empty (it still works in Debug, which isn't trimmed).
 // If a new collection type is ever bound to a control, add it here too.
+[assembly: WinRT.GeneratedWinRTExposedExternalType(typeof(ObservableCollection<FolderViewModel>))]
 [assembly: WinRT.GeneratedWinRTExposedExternalType(typeof(ObservableCollection<WatchedFileViewModel>))]
 [assembly: WinRT.GeneratedWinRTExposedExternalType(typeof(ObservableCollection<WatchedKeyViewModel>))]
 [assembly: WinRT.GeneratedWinRTExposedExternalType(typeof(List<IniKeyPickItem>))]

@@ -24,14 +24,39 @@ public partial class WatchedKeyViewModel : ObservableObject
     /// <summary>What the key list shows: "[Section] KeyName" or just "KeyName" when there's no section.</summary>
     public string DisplayLabel => string.IsNullOrEmpty(Model.Section) ? Model.KeyName : $"[{Model.Section}] {Model.KeyName}";
 
-    /// <summary>True while the pointer is over this key's row - shows the row's remove button.</summary>
+    /// <summary>True while the pointer is over this key's row - shows the row's buttons.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowRevert))]
     private bool _isHovered;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowRevert))]
     private string _desiredValue;
 
     partial void OnDesiredValueChanged(string value) => Model.DesiredValue = value;
+
+    // --- Revert to the value the key had when it was added ---
+
+    /// <summary>
+    /// Revert button: on hover, only when there's an original value to go back to and the
+    /// desired value currently differs from it. Keys added before OriginalValue was recorded
+    /// have none, so they never show it.
+    /// </summary>
+    public bool ShowRevert => IsHovered && Model.OriginalValue is not null && DesiredValue != Model.OriginalValue;
+
+    public string RevertToolTip => $"Revert to original value: {Model.OriginalValue}";
+
+    /// <summary>
+    /// Sets the desired value back to the original. Like typing it in: the file itself only
+    /// changes on the next Apply.
+    /// </summary>
+    public void RevertToOriginal()
+    {
+        if (Model.OriginalValue is not null)
+            DesiredValue = Model.OriginalValue;
+    }
+
+    // --- Status on disk ---
 
     /// <summary>
     /// Whether this key is currently unique/missing/duplicated in the actual file on disk.
@@ -39,7 +64,16 @@ public partial class WatchedKeyViewModel : ObservableObject
     /// an Apply run - only UniqueMatch was eligible to actually be written.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsUnique))]
+    [NotifyPropertyChangedFor(nameof(IsNotFound))]
+    [NotifyPropertyChangedFor(nameof(IsDuplicate))]
     private KeyLookupStatus _status = KeyLookupStatus.NotFound;
+
+    // One flat bool per status: the row shows the matching icon (tooltip "Unique",
+    // "Not Found", "Duplicate") - no converters needed.
+    public bool IsUnique => Status == KeyLookupStatus.UniqueMatch;
+    public bool IsNotFound => Status == KeyLookupStatus.NotFound;
+    public bool IsDuplicate => Status == KeyLookupStatus.DuplicateMatches;
 
     /// <summary>
     /// Set when the most recent Apply run hit a file-level error (locked/missing/permission

@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using IniAnchor.App.ViewModels;
 using IniAnchor.App.Views;
+using IniAnchor.Core.Models;
 using IniAnchor.Core.Persistence;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -162,6 +165,7 @@ namespace IniAnchor.App
         {
             switch (RowItem(sender))
             {
+                case FolderViewModel folder: folder.IsHovered = hovered; break;
                 case WatchedFileViewModel file: file.IsHovered = hovered; break;
                 case WatchedKeyViewModel key: key.IsHovered = hovered; break;
             }
@@ -200,40 +204,138 @@ namespace IniAnchor.App
                 ViewModel.RemoveFileCommand.Execute(file);
         }
 
+        private void RevertKeyButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (RowItem(sender) is WatchedKeyViewModel key)
+            {
+                key.RevertToOriginal(); // desired value only - the file changes on the next Apply
+                ViewModel.Persist();
+            }
+        }
+
         private void RemoveKeyButton_Click(object sender, RoutedEventArgs e)
         {
             if (RowItem(sender) is WatchedKeyViewModel key)
                 ViewModel.RemoveKeyCommand.Execute(key);
         }
 
-        // Confirmation needs a XamlRoot (like the key picker), so it lives here; the actual
-        // apply logic stays in MainViewModel.ApplyAllCommand.
-        private async void ApplyButton_Click(object sender, RoutedEventArgs e)
+        // --- Folders (sidebar) ---
+        // Name prompts and the delete confirmation need a XamlRoot, so they live here; the
+        // actual folder logic stays in MainViewModel.
+
+        private async void NewFolderButton_Click(object sender, RoutedEventArgs e)
         {
-            var totalKeys = ViewModel.WatchedFiles.Sum(f => f.WatchedKeys.Count);
+            var name = await PromptForFolderNameAsync("New folder", ViewModel.SuggestNewFolderName(), "Create");
+            if (name is not null)
+                ViewModel.CreateFolder(name);
+        }
+
+        private async void RenameFolderButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (RowItem(sender) is not FolderViewModel folder)
+                return;
+
+            var name = await PromptForFolderNameAsync("Rename folder", folder.Name, "Rename");
+            if (name is not null)
+                ViewModel.RenameFolder(folder, name);
+        }
+
+        private async void DeleteFolderButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (RowItem(sender) is not FolderViewModel folder)
+                return;
+
+            var dialog = new ContentDialog
+            {
+                XamlRoot = Content.XamlRoot,
+                Title = "Delete folder?",
+                Content = $"Delete '{folder.Name}' and its {ViewModel.EntryCount(folder)} file entr(ies) with their keys? " +
+                          "The ini files on disk are not changed.",
+                PrimaryButtonText = "Delete",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close // deleting is destructive - Enter cancels
+            };
+
+            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+                ViewModel.DeleteFolder(folder);
+        }
+
+        /// <summary>Asks for a folder name. Returns the trimmed name, or null on Cancel.</summary>
+        private async Task<string?> PromptForFolderNameAsync(string title, string initialName, string primaryText)
+        {
+            var nameBox = new TextBox { Text = initialName, PlaceholderText = "Folder name" };
+
+            var dialog = new ContentDialog
+            {
+                XamlRoot = Content.XamlRoot,
+                Title = title,
+                Content = nameBox,
+                PrimaryButtonText = primaryText,
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary
+            };
+
+            // No empty names; start with the text selected so typing replaces it.
+            nameBox.TextChanged += (_, _) => dialog.IsPrimaryButtonEnabled = !string.IsNullOrWhiteSpace(nameBox.Text);
+            nameBox.Loaded += (_, _) =>
+            {
+                nameBox.Focus(FocusState.Programmatic);
+                nameBox.SelectAll();
+            };
+
+            return await dialog.ShowAsync() == ContentDialogResult.Primary
+                ? nameBox.Text.Trim()
+                : null;
+        }
+
+        // --- Apply ---
+        // Confirmation needs a XamlRoot (like the key picker), so it lives here; the actual
+        // apply logic stays in MainViewModel.ApplyAsync.
+
+        private async void ApplyFolderButton_Click(object sender, RoutedEventArgs e)
+        {
+            await ConfirmAndApplyAsync(ViewModel.FilesToApply(allFolders: false),
+                $"the folder '{ViewModel.SelectedFolder?.Name}'");
+        }
+
+        private async void ApplyAllButton_Click(object sender, RoutedEventArgs e)
+        {
+            await ConfirmAndApplyAsync(ViewModel.FilesToApply(allFolders: true), "all folders");
+        }
+
+        private async Task ConfirmAndApplyAsync(List<WatchedFile> files, string scope)
+        {
+            var totalKeys = files.Sum(f => f.WatchedKeys.Count);
             if (totalKeys == 0)
             {
-                ViewModel.LastApplyMessage = "Nothing to apply - no watched keys yet.";
+                ViewModel.LastApplyMessage = $"Nothing to apply - no watched keys in {scope}.";
                 return;
             }
 
-            var fileCount = ViewModel.WatchedFiles.Count(f => f.WatchedKeys.Count > 0);
+            var entryCount = files.Count(f => f.WatchedKeys.Count > 0);
+            var message = $"This will set {totalKeys} watched key(s) across {entryCount} file entr(ies) in {scope}. " +
+                          "Keys that already have the desired value are left untouched.";
+
+            // Only possible across folders (profiles setting the same key differently).
+            var conflicts = Watchlist.CountConflicts(files);
+            if (conflicts > 0)
+            {
+                message += $"\n\n{conflicts} key(s) are set to different values by different folders. " +
+                           "The folder lowest in the sidebar wins.";
+            }
 
             var dialog = new ContentDialog
             {
                 XamlRoot = Content.XamlRoot,
                 Title = "Apply changes?",
-                Content = $"This will write {totalKeys} key(s) across {fileCount} file(s) to disk.",
+                Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap },
                 PrimaryButtonText = "Apply",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Primary
             };
 
-            var result = await dialog.ShowAsync();
-            if (result == ContentDialogResult.Primary)
-            {
-                await ViewModel.ApplyAllCommand.ExecuteAsync(null);
-            }
+            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+                await ViewModel.ApplyAsync(files);
         }
     }
 }

@@ -16,7 +16,7 @@
 
     <Grid Padding="16" RowSpacing="12">
         <Grid.Resources>
-            <!-- Shared by both lists: the row fills the whole item (no default padding), so
+            <!-- Shared by all lists: the row fills the whole item (no default padding), so
                  hovering anywhere on it shows its buttons, and the buttons sit at the right edge. -->
             <Style x:Key="FullRowItemStyle" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
                 <Setter Property="Padding" Value="0" />
@@ -32,12 +32,69 @@
 
         <Grid Grid.Row="0" ColumnSpacing="16">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="200" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Left: watched files -->
+            <!-- Sidebar: folders. "All" is always first and has no rename/delete buttons. -->
             <Grid Grid.Column="0" RowSpacing="8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
+                    <Button Content="New folder..." Click="NewFolderButton_Click" />
+                </StackPanel>
+
+                <ListView Grid.Row="1"
+                          ItemsSource="{x:Bind ViewModel.Folders}"
+                          SelectedItem="{x:Bind ViewModel.SelectedFolder, Mode=TwoWay}"
+                          ItemContainerStyle="{StaticResource FullRowItemStyle}">
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="vm:FolderViewModel">
+                            <Grid Padding="12,0,4,0" ColumnSpacing="4"
+                                  Background="Transparent"
+                                  PointerEntered="Row_PointerEntered"
+                                  PointerExited="Row_PointerExited">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon Glyph="{x:Bind Glyph}" FontSize="14" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{x:Bind Name, Mode=OneWay}"
+                                           Margin="8,0,0,0"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+                                <Button Grid.Column="2"
+                                        Width="32" Height="32" Padding="0"
+                                        VerticalAlignment="Center"
+                                        Visibility="{x:Bind ShowActions, Mode=OneWay}"
+                                        Click="RenameFolderButton_Click"
+                                        ToolTipService.ToolTip="Rename folder">
+                                    <FontIcon Glyph="&#xE70F;" FontSize="14" />
+                                </Button>
+                                <!-- Delete is always the rightmost button -->
+                                <Button Grid.Column="3"
+                                        Width="32" Height="32" Padding="0"
+                                        VerticalAlignment="Center"
+                                        Visibility="{x:Bind ShowActions, Mode=OneWay}"
+                                        Click="DeleteFolderButton_Click"
+                                        ToolTipService.ToolTip="Delete folder and its entries">
+                                    <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                </Button>
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </Grid>
+
+            <!-- Middle: the selected folder's file entries -->
+            <Grid Grid.Column="1" RowSpacing="8">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
@@ -48,7 +105,7 @@
                 </StackPanel>
 
                 <Grid Grid.Row="1">
-                    <ListView ItemsSource="{x:Bind ViewModel.WatchedFiles}"
+                    <ListView ItemsSource="{x:Bind ViewModel.VisibleFiles}"
                               SelectedItem="{x:Bind ViewModel.SelectedFile, Mode=TwoWay}"
                               ItemContainerStyle="{StaticResource FullRowItemStyle}"
                               Background="Transparent"
@@ -65,9 +122,16 @@
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{x:Bind DisplayText}"
-                                               VerticalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind FilePath}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <!-- Only in "All": which folder this entry belongs to -->
+                                        <TextBlock Text="{x:Bind FolderName, Mode=OneWay}"
+                                                   Visibility="{x:Bind ShowFolderName, Mode=OneWay}"
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   Opacity="0.6"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
                                     <Button Grid.Column="1"
                                             Width="32" Height="32" Padding="0"
                                             VerticalAlignment="Center"
@@ -90,15 +154,15 @@
                         </ListView.ItemTemplate>
                     </ListView>
                     <TextBlock Text="No files yet. Click 'Add ini file...' to get started."
-                               Visibility="{x:Bind ViewModel.HasNoWatchedFiles, Mode=OneWay}"
+                               Visibility="{x:Bind ViewModel.HasNoVisibleFiles, Mode=OneWay}"
                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                TextAlignment="Center" TextWrapping="Wrap" MaxWidth="220"
                                Opacity="0.6" IsHitTestVisible="False" />
                 </Grid>
             </Grid>
 
-            <!-- Right: watched keys for the selected file -->
-            <Grid Grid.Column="1" RowSpacing="8">
+            <!-- Right: watched keys for the selected file entry -->
+            <Grid Grid.Column="2" RowSpacing="8">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
@@ -129,6 +193,7 @@
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="{x:Bind DisplayLabel}"
                                                VerticalAlignment="Center"
@@ -139,17 +204,39 @@
                                              Width="160"
                                              VerticalAlignment="Center"
                                              LostFocus="DesiredValueBox_LostFocus" />
-                                    <TextBlock Grid.Column="2"
-                                               Text="{x:Bind Status, Mode=OneWay}"
-                                               Opacity="0.6" VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="3"
-                                               Text="⚠"
-                                               Foreground="Red"
-                                               VerticalAlignment="Center"
-                                               Visibility="{x:Bind HasApplyError, Mode=OneWay}"
-                                               ToolTipService.ToolTip="{x:Bind LastApplyError, Mode=OneWay}" />
-                                    <!-- Column 4 is empty space, pushing remove to the right edge -->
+                                    <!-- Status on disk: one icon, name on hover. Only one is visible at a time. -->
+                                    <Grid Grid.Column="2" VerticalAlignment="Center">
+                                        <FontIcon Glyph="&#xE73E;" FontSize="16"
+                                                  Foreground="{ThemeResource SystemFillColorSuccessBrush}"
+                                                  Visibility="{x:Bind IsUnique, Mode=OneWay}"
+                                                  ToolTipService.ToolTip="Unique" />
+                                        <FontIcon Glyph="&#xE711;" FontSize="16"
+                                                  Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                                  Visibility="{x:Bind IsNotFound, Mode=OneWay}"
+                                                  ToolTipService.ToolTip="Not Found" />
+                                        <FontIcon Glyph="&#xE7BA;" FontSize="16"
+                                                  Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                                  Visibility="{x:Bind IsDuplicate, Mode=OneWay}"
+                                                  ToolTipService.ToolTip="Duplicate" />
+                                    </Grid>
+                                    <!-- Last Apply hit a file error; hover shows the actual message -->
+                                    <FontIcon Grid.Column="3"
+                                              Glyph="&#xE783;" FontSize="16"
+                                              Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                              VerticalAlignment="Center"
+                                              Visibility="{x:Bind HasApplyError, Mode=OneWay}"
+                                              ToolTipService.ToolTip="{x:Bind LastApplyError, Mode=OneWay}" />
+                                    <!-- Column 4 is empty space, pushing the buttons to the right edge -->
                                     <Button Grid.Column="5"
+                                            Width="32" Height="32" Padding="0"
+                                            VerticalAlignment="Center"
+                                            Visibility="{x:Bind ShowRevert, Mode=OneWay}"
+                                            Click="RevertKeyButton_Click"
+                                            ToolTipService.ToolTip="{x:Bind RevertToolTip}">
+                                        <FontIcon Glyph="&#xE7A7;" FontSize="14" />
+                                    </Button>
+                                    <!-- Remove is always the rightmost button -->
+                                    <Button Grid.Column="6"
                                             Width="32" Height="32" Padding="0"
                                             VerticalAlignment="Center"
                                             Visibility="{x:Bind IsHovered, Mode=OneWay}"
@@ -170,11 +257,16 @@
             </Grid>
         </Grid>
 
-        <!-- Bottom: single global Apply, per the app's whole point -->
+        <!-- Bottom: apply the selected folder, or everything -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12">
-            <Button Content="Apply"
+            <Button Content="Apply folder"
+                    IsEnabled="{x:Bind ViewModel.HasUserFolderSelected, Mode=OneWay}"
+                    Click="ApplyFolderButton_Click"
+                    ToolTipService.ToolTip="Apply only the selected folder's entries" />
+            <Button Content="Apply all"
                     Style="{StaticResource AccentButtonStyle}"
-                    Click="ApplyButton_Click" />
+                    Click="ApplyAllButton_Click"
+                    ToolTipService.ToolTip="Apply every entry in every folder" />
             <TextBlock Text="{x:Bind ViewModel.LastApplyMessage, Mode=OneWay}"
                        VerticalAlignment="Center"
                        Opacity="0.8" />

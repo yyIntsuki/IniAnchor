@@ -10,7 +10,8 @@ namespace IniAnchor.Core.Persistence;
 /// Any new type saved as JSON must get its own [JsonSerializable] line here.
 /// </summary>
 [JsonSourceGenerationOptions(WriteIndented = true)]
-[JsonSerializable(typeof(List<WatchedFile>))]
+[JsonSerializable(typeof(Watchlist))]
+[JsonSerializable(typeof(List<WatchedFile>))] // old pre-folders format, still read by WatchlistStore.Load
 [JsonSerializable(typeof(AppSettings))]
 internal partial class WatchlistJsonContext : JsonSerializerContext
 {

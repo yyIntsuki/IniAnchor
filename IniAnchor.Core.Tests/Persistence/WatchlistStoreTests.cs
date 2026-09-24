@@ -20,40 +20,42 @@ public class WatchlistStoreTests : IDisposable
     }
 
     [Fact]
-    public void Load_when_file_does_not_exist_returns_empty_list()
+    public void Load_when_file_does_not_exist_returns_empty_watchlist()
     {
         var store = new WatchlistStore(_tempFilePath);
 
         var result = store.Load();
 
-        Assert.Empty(result);
+        Assert.Empty(result.Folders);
+        Assert.Empty(result.Files);
     }
 
     [Fact]
     public void Save_then_load_round_trips_watched_files_and_keys()
     {
         var store = new WatchlistStore(_tempFilePath);
-        var original = new List<WatchedFile>
+        var original = new Watchlist
         {
-            new()
+            Files =
             {
-                FilePath = @"C:\configs\app.ini",
-                DisplayName = "My App",
-                WatchedKeys = new List<WatchedKey>
+                new()
                 {
-                    new()
+                    FilePath = @"C:\configs\app.ini",
+                    WatchedKeys = new List<WatchedKey>
                     {
-                        Section = "General",
-                        KeyName = "Name",
-                        DesiredValue = "Ada",
-                        LastAppliedValue = "OldAda",
-                        LastAppliedAtUtc = new DateTime(2024, 1, 1, 12, 0, 0, DateTimeKind.Utc)
-                    },
-                    new()
-                    {
-                        Section = null,
-                        KeyName = "root_key",
-                        DesiredValue = "root_value"
+                        new()
+                        {
+                            Section = "General",
+                            KeyName = "Name",
+                            DesiredValue = "Ada",
+                            OriginalValue = "Original"
+                        },
+                        new()
+                        {
+                            Section = null,
+                            KeyName = "root_key",
+                            DesiredValue = "root_value"
+                        }
                     }
                 }
             }
@@ -62,14 +64,97 @@ public class WatchlistStoreTests : IDisposable
         store.Save(original);
         var loaded = store.Load();
 
-        var loadedFile = Assert.Single(loaded);
-        Assert.Equal(original[0].Id, loadedFile.Id);
-        Assert.Equal(original[0].FilePath, loadedFile.FilePath);
-        Assert.Equal(original[0].DisplayName, loadedFile.DisplayName);
+        var loadedFile = Assert.Single(loaded.Files);
+        Assert.Equal(original.Files[0].Id, loadedFile.Id);
+        Assert.Equal(original.Files[0].FilePath, loadedFile.FilePath);
+        Assert.Null(loadedFile.FolderId);
         Assert.Equal(2, loadedFile.WatchedKeys.Count);
         Assert.Equal("Ada", loadedFile.WatchedKeys[0].DesiredValue);
-        Assert.Equal("OldAda", loadedFile.WatchedKeys[0].LastAppliedValue);
+        Assert.Equal("Original", loadedFile.WatchedKeys[0].OriginalValue);
         Assert.Null(loadedFile.WatchedKeys[1].Section);
+    }
+
+    [Fact]
+    public void Save_then_load_round_trips_folders_and_folder_membership()
+    {
+        var store = new WatchlistStore(_tempFilePath);
+        var folder = new WatchFolder { Name = "Profile A" };
+        var original = new Watchlist
+        {
+            Folders = { folder },
+            Files = { new WatchedFile { FilePath = @"C:\configs\app.ini", FolderId = folder.Id } }
+        };
+
+        store.Save(original);
+        var loaded = store.Load();
+
+        var loadedFolder = Assert.Single(loaded.Folders);
+        Assert.Equal(folder.Id, loadedFolder.Id);
+        Assert.Equal("Profile A", loadedFolder.Name);
+        Assert.Equal(folder.Id, Assert.Single(loaded.Files).FolderId);
+    }
+
+    [Fact]
+    public void Load_reads_old_pre_folders_format_as_entries_without_a_folder()
+    {
+        // The format before folders existed: a plain JSON array of file entries.
+        File.WriteAllText(_tempFilePath,
+            """
+            [
+              {
+                "FilePath": "C:\\configs\\app.ini",
+                "WatchedKeys": [ { "Section": "General", "KeyName": "Name", "DesiredValue": "Ada" } ]
+              }
+            ]
+            """);
+        var store = new WatchlistStore(_tempFilePath);
+
+        var loaded = store.Load();
+
+        Assert.Empty(loaded.Folders);
+        var file = Assert.Single(loaded.Files);
+        Assert.Equal(@"C:\configs\app.ini", file.FilePath);
+        Assert.Null(file.FolderId);
+        Assert.Equal("Ada", Assert.Single(file.WatchedKeys).DesiredValue);
+    }
+
+    [Fact]
+    public void Old_format_is_saved_back_in_the_new_format()
+    {
+        File.WriteAllText(_tempFilePath, """[ { "FilePath": "C:\\configs\\app.ini" } ]""");
+        var store = new WatchlistStore(_tempFilePath);
+
+        store.Save(store.Load());
+
+        Assert.StartsWith("{", File.ReadAllText(_tempFilePath).TrimStart());
+        Assert.Single(store.Load().Files);
+    }
+
+    [Fact]
+    public void Load_ignores_removed_fields_from_older_files()
+    {
+        // DisplayName, LastAppliedValue and LastAppliedAtUtc were removed from the model;
+        // files saved before that must still load.
+        File.WriteAllText(_tempFilePath,
+            """
+            {
+              "Folders": [],
+              "Files": [
+                {
+                  "FilePath": "C:\\configs\\app.ini",
+                  "DisplayName": "My App",
+                  "WatchedKeys": [
+                    { "KeyName": "Name", "DesiredValue": "Ada", "LastAppliedValue": "Ada", "LastAppliedAtUtc": "2024-01-01T12:00:00Z" }
+                  ]
+                }
+              ]
+            }
+            """);
+        var store = new WatchlistStore(_tempFilePath);
+
+        var loaded = store.Load();
+
+        Assert.Equal("Ada", Assert.Single(Assert.Single(loaded.Files).WatchedKeys).DesiredValue);
     }
 
     [Fact]
@@ -80,7 +165,7 @@ public class WatchlistStoreTests : IDisposable
 
         try
         {
-            store.Save(new List<WatchedFile>());
+            store.Save(new Watchlist());
 
             Assert.True(File.Exists(nestedPath));
         }
@@ -102,7 +187,7 @@ public class WatchlistStoreTests : IDisposable
         // must land in AppContext.BaseDirectory, not %LOCALAPPDATA%.
         var expectedPath = Path.Combine(AppContext.BaseDirectory, "watchlist.json");
 
-        store.Save(new List<WatchedFile>());
+        store.Save(new Watchlist());
         try
         {
             Assert.True(File.Exists(expectedPath));
