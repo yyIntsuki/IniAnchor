@@ -316,7 +316,9 @@ public partial class MainViewModel : ObservableObject
             Section = picked.Section,
             KeyName = picked.KeyName,
             DesiredValue = picked.CurrentValue,
-            OriginalValue = picked.CurrentValue // kept forever, for "revert"
+            OriginalValue = picked.CurrentValue, // kept forever, for "revert"
+            CommentedOut = picked.IsCommentedOut, // matches the file: a commented-out key starts off
+            OriginalCommentedOut = picked.IsCommentedOut
         };
 
         SelectedFile.Model.WatchedKeys.Add(watchedKey);

@@ -50,7 +50,7 @@ public static class IniParser
             return IniLine.CreateBlank(rawText, currentSection);
 
         if (trimmed.StartsWith(';') || trimmed.StartsWith('#'))
-            return IniLine.CreateComment(rawText, currentSection);
+            return TryParseCommentedKey(rawText, currentSection) ?? IniLine.CreateComment(rawText, currentSection);
 
         if (trimmed.StartsWith('[') && trimmed.EndsWith(']'))
         {
@@ -59,23 +59,74 @@ public static class IniParser
             return IniLine.CreateSection(rawText, sectionName);
         }
 
-        var eqIndex = rawText.IndexOf('=');
+        if (!TrySplitKeyValue(rawText, out var key, out var value, out var valuePrefix))
+            return IniLine.CreateUnknown(rawText, currentSection);
+
+        return IniLine.CreateKeyValue(rawText, currentSection, key, value, valuePrefix);
+    }
+
+    /// <summary>
+    /// Recognizes a commented-out key such as "; include = Core\Debugger\Debugger.ini" or
+    /// "#key=value": the comment marker, optional spaces, then exactly the shape of a key
+    /// line whose name is identifier-like (starts with a letter, '_' or '$'; then letters,
+    /// digits, '_', '-', '.', '$'). Prose comments don't fit: they have spaces or quotes
+    /// before their '=' ("; \"skip\" = skip shader", "; (e.g. \"dump = ..."). Anything else
+    /// stays a plain comment (returns null).
+    /// </summary>
+    private static IniLine? TryParseCommentedKey(string rawText, string? currentSection)
+    {
+        // The first non-whitespace character is the ';' or '#' marker.
+        var bodyStart = rawText.IndexOfAny(CommentMarkers) + 1;
+        while (bodyStart < rawText.Length && (rawText[bodyStart] == ' ' || rawText[bodyStart] == '\t'))
+            bodyStart++;
+
+        var body = rawText[bodyStart..];
+        if (!TrySplitKeyValue(body, out var key, out var value, out var valuePrefix) || !IsIdentifierLike(key))
+            return null;
+
+        return IniLine.CreateCommentedKeyValue(rawText, currentSection, rawText[..bodyStart], key, value, valuePrefix);
+    }
+
+    private static readonly char[] CommentMarkers = { ';', '#' };
+
+    private static bool IsIdentifierLike(string name)
+    {
+        if (!(char.IsLetter(name[0]) || name[0] == '_' || name[0] == '$'))
+            return false;
+
+        foreach (var c in name)
+        {
+            if (!(char.IsLetterOrDigit(c) || c == '_' || c == '-' || c == '.' || c == '$'))
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Splits "key = value" text. valuePrefix is everything up to the value, preserving
+    /// whatever whitespace already followed '=' ("key = value" vs "key=value"), so a changed
+    /// value can be written back in the same style. Values may themselves contain '='.
+    /// </summary>
+    private static bool TrySplitKeyValue(string text, out string key, out string value, out string valuePrefix)
+    {
+        key = value = valuePrefix = string.Empty;
+
+        var eqIndex = text.IndexOf('=');
         if (eqIndex < 0)
-            return IniLine.CreateUnknown(rawText, currentSection);
+            return false;
 
-        var key = rawText[..eqIndex].Trim();
+        key = text[..eqIndex].Trim();
         if (key.Length == 0)
-            return IniLine.CreateUnknown(rawText, currentSection);
+            return false;
 
-        // Preserve whatever whitespace already followed '=' (e.g. "key = value" vs "key=value").
-        var afterEq = rawText[(eqIndex + 1)..];
+        var afterEq = text[(eqIndex + 1)..];
         var valueStart = 0;
         while (valueStart < afterEq.Length && (afterEq[valueStart] == ' ' || afterEq[valueStart] == '\t'))
             valueStart++;
 
-        var valuePrefix = rawText[..(eqIndex + 1 + valueStart)];
-        var value = afterEq[valueStart..];
-
-        return IniLine.CreateKeyValue(rawText, currentSection, key, value, valuePrefix);
+        valuePrefix = text[..(eqIndex + 1 + valueStart)];
+        value = afterEq[valueStart..];
+        return true;
     }
 }

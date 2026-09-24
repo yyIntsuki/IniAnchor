@@ -15,14 +15,20 @@ public partial class WatchedKeyViewModel : ObservableObject
     {
         Model = model;
         _desiredValue = model.DesiredValue;
+        _commentedOut = model.CommentedOut;
     }
 
     public string Section => Model.Section ?? string.Empty;
 
     public string KeyName => Model.KeyName;
 
-    /// <summary>What the key list shows: "[Section] KeyName" or just "KeyName" when there's no section.</summary>
-    public string DisplayLabel => string.IsNullOrEmpty(Model.Section) ? Model.KeyName : $"[{Model.Section}] {Model.KeyName}";
+    /// <summary>
+    /// What the key list shows: "[Section] KeyName" or just "KeyName" when there's no section,
+    /// with a "; " in front when the key is turned off - just like it will look in the file.
+    /// </summary>
+    public string DisplayLabel =>
+        (CommentedOut ? "; " : string.Empty) +
+        (string.IsNullOrEmpty(Model.Section) ? Model.KeyName : $"[{Model.Section}] {Model.KeyName}");
 
     /// <summary>True while the pointer is over this key's row - shows the row's buttons.</summary>
     [ObservableProperty]
@@ -35,25 +41,57 @@ public partial class WatchedKeyViewModel : ObservableObject
 
     partial void OnDesiredValueChanged(string value) => Model.DesiredValue = value;
 
-    // --- Revert to the value the key had when it was added ---
+    // --- On/off (commented out) ---
 
     /// <summary>
-    /// Revert button: on hover, only when there's an original value to go back to and the
-    /// desired value currently differs from it. Keys added before OriginalValue was recorded
-    /// have none, so they never show it.
+    /// The key is turned off: Apply comments its line out instead of setting the value.
+    /// Like the value box, this only changes what the user wants - the file changes on Apply.
     /// </summary>
-    public bool ShowRevert => IsHovered && Model.OriginalValue is not null && DesiredValue != Model.OriginalValue;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayLabel))]
+    [NotifyPropertyChangedFor(nameof(ContentOpacity))]
+    [NotifyPropertyChangedFor(nameof(ToggleGlyph))]
+    [NotifyPropertyChangedFor(nameof(ToggleToolTip))]
+    [NotifyPropertyChangedFor(nameof(ShowRevert))]
+    private bool _commentedOut;
 
-    public string RevertToolTip => $"Revert to original value: {Model.OriginalValue}";
+    partial void OnCommentedOutChanged(bool value) => Model.CommentedOut = value;
+
+    public void ToggleCommentedOut() => CommentedOut = !CommentedOut;
+
+    /// <summary>Turned-off keys are shown dimmed (name and value box).</summary>
+    public double ContentOpacity => CommentedOut ? 0.5 : 1.0;
+
+    /// <summary>The toggle button shows what clicking it will do: hide (turn off) or show (turn on).</summary>
+    public string ToggleGlyph => CommentedOut ? "\uE890" : "\uED1A";
+
+    public string ToggleToolTip => CommentedOut ? "Enable on Apply" : "Comment out on Apply";
+
+    // --- Revert to how the key was when it was added (value and on/off) ---
 
     /// <summary>
-    /// Sets the desired value back to the original. Like typing it in: the file itself only
-    /// changes on the next Apply.
+    /// Revert button: on hover, only when there's an original to go back to and the key
+    /// currently differs from it (value or on/off). Keys added before OriginalValue was
+    /// recorded have none, so they never show it.
+    /// </summary>
+    public bool ShowRevert =>
+        IsHovered && Model.OriginalValue is not null &&
+        (DesiredValue != Model.OriginalValue || CommentedOut != Model.OriginalCommentedOut);
+
+    public string RevertToolTip =>
+        $"Revert to original: {(Model.OriginalCommentedOut ? "; " : string.Empty)}{Model.OriginalValue}";
+
+    /// <summary>
+    /// Sets the value and on/off state back to the original. Like typing it in: the file
+    /// itself only changes on the next Apply.
     /// </summary>
     public void RevertToOriginal()
     {
-        if (Model.OriginalValue is not null)
-            DesiredValue = Model.OriginalValue;
+        if (Model.OriginalValue is null)
+            return;
+
+        DesiredValue = Model.OriginalValue;
+        CommentedOut = Model.OriginalCommentedOut;
     }
 
     // --- Status on disk ---

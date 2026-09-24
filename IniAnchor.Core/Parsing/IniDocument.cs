@@ -10,8 +10,10 @@ public class IniDocument
     private readonly List<IniLine> _lines;
 
     /// <summary>
-    /// (Section, Key) -> line indices, built once and reused for every lookup on this document.
-    /// Safe to cache: a line's Section/Key never change after parsing, only its Value does.
+    /// (Section, Key) -> line indices of key lines (active and commented out), built once and
+    /// reused for every lookup on this document. Safe to cache: a line's Section/Key never
+    /// change after parsing - only its value and commented-out state do, and those are read
+    /// at lookup time.
     /// </summary>
     private Dictionary<(string? Section, string Key), List<int>>? _index;
 
@@ -31,20 +33,35 @@ public class IniDocument
     /// <summary>
     /// Looks up a (section, key) pair and classifies the result as not found / unique / duplicate.
     /// This is the method the Apply pipeline should use before writing a value.
+    ///
+    /// Active lines always win: if the key has any active line, only those count, and
+    /// commented-out look-alikes (e.g. commented examples next to the real line) are ignored.
+    /// Only when there is no active line do commented-out lines count - that's a key that
+    /// has been turned off.
     /// </summary>
-    public KeyLookupResult LookupKey(string? section, string key) =>
-        KeyLookupResult.From(FindKeyOccurrences(section, key));
+    public KeyLookupResult LookupKey(string? section, string key)
+    {
+        var active = FindKeyOccurrences(section, key);
+        return KeyLookupResult.From(active.Count > 0 ? active : FindCommentedKeyOccurrences(section, key));
+    }
 
     /// <summary>
-    /// Finds all line indices where the given key appears in the given section.
-    /// Section and key names are compared case-insensitively, matching common ini conventions.
-    /// Pass null for section to look for a key outside any section.
+    /// Finds all line indices where the given key appears as an active line in the given
+    /// section. Section and key names are compared case-insensitively, matching common ini
+    /// conventions. Pass null for section to look for a key outside any section.
     /// </summary>
-    public List<int> FindKeyOccurrences(string? section, string key)
+    public List<int> FindKeyOccurrences(string? section, string key) =>
+        FindKeyLines(section, key, commentedOut: false);
+
+    /// <summary>Like <see cref="FindKeyOccurrences"/>, but for commented-out key lines.</summary>
+    public List<int> FindCommentedKeyOccurrences(string? section, string key) =>
+        FindKeyLines(section, key, commentedOut: true);
+
+    private List<int> FindKeyLines(string? section, string key, bool commentedOut)
     {
         var index = GetOrBuildIndex();
         return index.TryGetValue((NormalizeSection(section), key), out var matches)
-            ? new List<int>(matches)
+            ? matches.Where(i => _lines[i].IsCommentedOut == commentedOut).ToList()
             : new List<int>();
     }
 
@@ -54,6 +71,14 @@ public class IniDocument
             throw new ArgumentOutOfRangeException(nameof(lineIndex));
 
         _lines[lineIndex].SetValue(newValue);
+    }
+
+    public void SetCommentedOutAtLine(int lineIndex, bool commentedOut)
+    {
+        if (lineIndex < 0 || lineIndex >= _lines.Count)
+            throw new ArgumentOutOfRangeException(nameof(lineIndex));
+
+        _lines[lineIndex].SetCommentedOut(commentedOut);
     }
 
     private Dictionary<(string? Section, string Key), List<int>> GetOrBuildIndex()
@@ -66,7 +91,7 @@ public class IniDocument
         for (var i = 0; i < _lines.Count; i++)
         {
             var line = _lines[i];
-            if (line.Kind != IniLineKind.KeyValue)
+            if (!line.IsKeyLine)
                 continue;
 
             var entryKey = (NormalizeSection(line.Section), line.Key!);

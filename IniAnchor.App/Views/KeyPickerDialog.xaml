@@ -37,9 +37,10 @@
                                    Visibility="{x:Bind IsHeader}"
                                    Style="{StaticResource BodyStrongTextBlockStyle}"
                                    Margin="0,8,0,0" />
-                        <!-- Key row, indented under its section -->
+                        <!-- Key row, indented under its section; dimmed with "; " when commented out -->
                         <TextBlock Text="{x:Bind KeyLabel}"
                                    Visibility="{x:Bind IsKeyRow}"
+                                   Opacity="{x:Bind RowOpacity}"
                                    Margin="12,0,0,0"
                                    TextTrimming="CharacterEllipsis" />
                     </Grid>

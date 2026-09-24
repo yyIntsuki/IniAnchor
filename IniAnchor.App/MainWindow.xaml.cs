@@ -320,11 +320,20 @@ namespace IniAnchor.App
                 ViewModel.RemoveFileCommand.Execute(file);
         }
 
+        private void ToggleKeyCommentedOutButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (RowItem(sender) is WatchedKeyViewModel key)
+            {
+                key.ToggleCommentedOut(); // what the user wants - the file changes on the next Apply
+                ViewModel.Persist();
+            }
+        }
+
         private void RevertKeyButton_Click(object sender, RoutedEventArgs e)
         {
             if (RowItem(sender) is WatchedKeyViewModel key)
             {
-                key.RevertToOriginal(); // desired value only - the file changes on the next Apply
+                key.RevertToOriginal(); // value and on/off state - the file changes on the next Apply
                 ViewModel.Persist();
             }
         }
@@ -430,13 +439,14 @@ namespace IniAnchor.App
 
             var entryCount = files.Count(f => f.WatchedKeys.Count > 0);
             var message = $"This will set {totalKeys} watched key(s) across {entryCount} file entr(ies) in {scope}. " +
-                          "Keys that already have the desired value are left untouched.";
+                          "Keys that are already as you want them are left untouched.";
 
             // Only possible across folders (profiles setting the same key differently).
             var conflicts = Watchlist.CountConflicts(files);
             if (conflicts > 0)
             {
-                message += $"\n\n{conflicts} key(s) are set to different values by different folders. " +
+                message += $"\n\n{conflicts} key(s) are set differently by different folders " +
+                           "(different values, or on in one and commented out in another). " +
                            "The folder lowest in the sidebar wins.";
             }
 

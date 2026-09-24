@@ -48,7 +48,9 @@ public class WatchlistStoreTests : IDisposable
                             Section = "General",
                             KeyName = "Name",
                             DesiredValue = "Ada",
-                            OriginalValue = "Original"
+                            OriginalValue = "Original",
+                            CommentedOut = true,
+                            OriginalCommentedOut = true
                         },
                         new()
                         {
@@ -71,6 +73,9 @@ public class WatchlistStoreTests : IDisposable
         Assert.Equal(2, loadedFile.WatchedKeys.Count);
         Assert.Equal("Ada", loadedFile.WatchedKeys[0].DesiredValue);
         Assert.Equal("Original", loadedFile.WatchedKeys[0].OriginalValue);
+        Assert.True(loadedFile.WatchedKeys[0].CommentedOut);
+        Assert.True(loadedFile.WatchedKeys[0].OriginalCommentedOut);
+        Assert.False(loadedFile.WatchedKeys[1].CommentedOut);
         Assert.Null(loadedFile.WatchedKeys[1].Section);
     }
 
@@ -154,7 +159,10 @@ public class WatchlistStoreTests : IDisposable
 
         var loaded = store.Load();
 
-        Assert.Equal("Ada", Assert.Single(Assert.Single(loaded.Files).WatchedKeys).DesiredValue);
+        var key = Assert.Single(Assert.Single(loaded.Files).WatchedKeys);
+        Assert.Equal("Ada", key.DesiredValue);
+        Assert.False(key.CommentedOut);          // older files: every key is on
+        Assert.False(key.OriginalCommentedOut);
     }
 
     [Fact]

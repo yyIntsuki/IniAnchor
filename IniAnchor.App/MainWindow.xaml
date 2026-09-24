@@ -311,12 +311,16 @@
                                                 <ColumnDefinition Width="20" />
                                                 <ColumnDefinition Width="32" />
                                                 <ColumnDefinition Width="32" />
+                                                <ColumnDefinition Width="32" />
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Text="{x:Bind DisplayLabel}"
+                                            <!-- Dimmed with "; " in front while the key is turned off (commented out) -->
+                                            <TextBlock Text="{x:Bind DisplayLabel, Mode=OneWay}"
+                                                       Opacity="{x:Bind ContentOpacity, Mode=OneWay}"
                                                        VerticalAlignment="Center"
                                                        TextTrimming="CharacterEllipsis" />
                                             <TextBox Grid.Column="1"
                                                      Text="{x:Bind DesiredValue, Mode=TwoWay}"
+                                                     Opacity="{x:Bind ContentOpacity, Mode=OneWay}"
                                                      HorizontalAlignment="Stretch"
                                                      VerticalAlignment="Center"
                                                      LostFocus="DesiredValueBox_LostFocus" />
@@ -342,7 +346,16 @@
                                                       VerticalAlignment="Center"
                                                       Visibility="{x:Bind HasApplyError, Mode=OneWay}"
                                                       ToolTipService.ToolTip="{x:Bind LastApplyError, Mode=OneWay}" />
+                                            <!-- Turn off (comment out) / turn on; the icon shows what a click will do -->
                                             <Button Grid.Column="4"
+                                                    Width="32" Height="32" Padding="0"
+                                                    VerticalAlignment="Center"
+                                                    Visibility="{x:Bind IsHovered, Mode=OneWay}"
+                                                    Click="ToggleKeyCommentedOutButton_Click"
+                                                    ToolTipService.ToolTip="{x:Bind ToggleToolTip, Mode=OneWay}">
+                                                <FontIcon Glyph="{x:Bind ToggleGlyph, Mode=OneWay}" FontSize="14" />
+                                            </Button>
+                                            <Button Grid.Column="5"
                                                     Width="32" Height="32" Padding="0"
                                                     VerticalAlignment="Center"
                                                     Visibility="{x:Bind ShowRevert, Mode=OneWay}"
@@ -351,7 +364,7 @@
                                                 <FontIcon Glyph="&#xE7A7;" FontSize="14" />
                                             </Button>
                                             <!-- Remove is always the rightmost button -->
-                                            <Button Grid.Column="5"
+                                            <Button Grid.Column="6"
                                                     Width="32" Height="32" Padding="0"
                                                     VerticalAlignment="Center"
                                                     Visibility="{x:Bind IsHovered, Mode=OneWay}"

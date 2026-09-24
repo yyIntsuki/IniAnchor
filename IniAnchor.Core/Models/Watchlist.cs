@@ -38,17 +38,19 @@ public class Watchlist
     }
 
     /// <summary>
-    /// Counts keys that more than one entry would set to different values in the same file
-    /// (only possible across folders). Used to warn before "Apply all". File paths, sections
-    /// and key names compare case-insensitively (like lookups); values compare exactly.
+    /// Counts keys that different entries would set differently in the same file (only
+    /// possible across folders): different values, or one on and one off (commented out).
+    /// Used to warn before "Apply all". File paths, sections and key names compare
+    /// case-insensitively (like lookups); desired states compare via
+    /// <see cref="WatchedKey.HasSameDesiredStateAs"/>.
     /// </summary>
     public static int CountConflicts(IEnumerable<WatchedFile> files) =>
         files
             .SelectMany(file => file.WatchedKeys.Select(key => (
                 Path: file.FilePath.ToUpperInvariant(),
                 Section: (key.Section ?? string.Empty).ToUpperInvariant(),
-                Key: key.KeyName.ToUpperInvariant(),
-                key.DesiredValue)))
-            .GroupBy(x => (x.Path, x.Section, x.Key))
-            .Count(group => group.Select(x => x.DesiredValue).Distinct().Count() > 1);
+                Name: key.KeyName.ToUpperInvariant(),
+                Key: key)))
+            .GroupBy(x => (x.Path, x.Section, x.Name))
+            .Count(group => group.Any(x => !x.Key.HasSameDesiredStateAs(group.First().Key)));
 }

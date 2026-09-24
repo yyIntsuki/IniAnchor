@@ -70,14 +70,22 @@ public sealed partial class KeyPickerDialog : ContentDialog
 
         foreach (var line in document.Lines)
         {
-            if (line.Kind != IniLineKind.KeyValue)
+            // Active keys, plus commented-out keys that have no active line - the ones that
+            // are turned off. A commented example next to a real key isn't listed (the active
+            // line is what IniAnchor would find for that key anyway).
+            var listed = line.Kind == IniLineKind.KeyValue ||
+                         (line.Kind == IniLineKind.CommentedKeyValue &&
+                          document.FindKeyOccurrences(line.Section, line.Key!).Count == 0);
+
+            if (!listed)
                 continue;
 
             _allItems.Add(new IniKeyPickItem
             {
                 Section = line.Section,
                 KeyName = line.Key!,
-                CurrentValue = line.Value ?? string.Empty
+                CurrentValue = line.Value ?? string.Empty,
+                IsCommentedOut = line.IsCommentedOut
             });
         }
     }

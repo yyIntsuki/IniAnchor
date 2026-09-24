@@ -76,30 +76,39 @@ public static class ApplyRunner
             }
         }
 
-        // Pass 2: stage each winning value in memory, but only if it actually differs.
-        // Exact comparison, same as IniLine.SetValue. If nothing differs, the file isn't
-        // written at all - so its timestamp is untouched, file watchers aren't triggered,
-        // and a locked/read-only file that's already correct doesn't produce a FileError.
+        // Pass 2: stage each winning key's desired state in memory, but only if the line
+        // doesn't already match it: on = active with the desired value (exact comparison,
+        // same as IniLine.SetValue); off = commented out (its value is left alone). If
+        // nothing differs, the file isn't written at all - so its timestamp is untouched,
+        // file watchers aren't triggered, and a locked/read-only file that's already correct
+        // doesn't produce a FileError.
         var outcomeByLine = new Dictionary<int, ApplyKeyOutcome>();
         var anyStaged = false;
 
         foreach (var (lineIndex, winner) in winnerByLine)
         {
-            if (document.Lines[lineIndex].Value == winner.DesiredValue)
+            var line = document.Lines[lineIndex];
+            var alreadyMatches = winner.CommentedOut
+                ? line.IsCommentedOut
+                : !line.IsCommentedOut && line.Value == winner.DesiredValue;
+
+            if (alreadyMatches)
             {
                 outcomeByLine[lineIndex] = ApplyKeyOutcome.AlreadySet;
             }
             else
             {
-                document.SetValueAtLine(lineIndex, winner.DesiredValue);
+                if (!winner.CommentedOut)
+                    document.SetValueAtLine(lineIndex, winner.DesiredValue);
+
+                document.SetCommentedOutAtLine(lineIndex, winner.CommentedOut);
                 outcomeByLine[lineIndex] = ApplyKeyOutcome.Applied;
                 anyStaged = true;
             }
         }
 
-        // Pass 3: every key's outcome. A losing key with the same value as the winner shares
-        // the winner's outcome (its value is what ends up in the file); a different value
-        // is Overridden.
+        // Pass 3: every key's outcome. A losing key that wants the same as the winner shares
+        // the winner's outcome (that's what ends up in the file); otherwise it's Overridden.
         var keyResultsByEntry = entries.ToDictionary(e => e, _ => new List<ApplyKeyResult>());
 
         foreach (var (entry, key, lookup) in lookups)
@@ -111,7 +120,7 @@ public static class ApplyRunner
                 case KeyLookupStatus.UniqueMatch:
                     var lineIndex = lookup.MatchingLineIndices[0];
                     var winner = winnerByLine[lineIndex];
-                    outcome = winner == key || winner.DesiredValue == key.DesiredValue
+                    outcome = winner == key || winner.HasSameDesiredStateAs(key)
                         ? outcomeByLine[lineIndex]
                         : ApplyKeyOutcome.Overridden;
                     break;

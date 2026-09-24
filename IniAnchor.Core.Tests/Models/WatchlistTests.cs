@@ -80,4 +80,20 @@ public class WatchlistTests
 
         Assert.Equal(0, Watchlist.CountConflicts(files));
     }
+
+    [Fact]
+    public void CountConflicts_counts_on_versus_off_but_not_off_versus_off()
+    {
+        WatchedFile WithKey(bool commentedOut, string value) => new()
+        {
+            FilePath = @"C:\game.ini",
+            WatchedKeys = { new WatchedKey { Section = "Loader", KeyName = "launch", DesiredValue = value, CommentedOut = commentedOut } }
+        };
+
+        // On vs off: conflict, even with the same value.
+        Assert.Equal(1, Watchlist.CountConflicts(new[] { WithKey(false, "a"), WithKey(true, "a") }));
+
+        // Both off: no conflict - an off key's value isn't written.
+        Assert.Equal(0, Watchlist.CountConflicts(new[] { WithKey(true, "a"), WithKey(true, "b") }));
+    }
 }
