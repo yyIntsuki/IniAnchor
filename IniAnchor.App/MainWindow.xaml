@@ -34,7 +34,6 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="200" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
             <!-- Sidebar: folders. "All" is always first and has no rename/delete buttons. -->
@@ -93,167 +92,221 @@
                 </ListView>
             </Grid>
 
-            <!-- Middle: the selected folder's file entries -->
-            <Grid Grid.Column="1" RowSpacing="8">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
+            <!-- Content area: the file list, with the keys panel flying in over it from the right. -->
+            <Grid x:Name="ContentArea" Grid.Column="1">
 
-                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
-                    <Button x:Name="AddFileButton" Content="Add ini file..." Click="AddFileButton_Click" />
-                </StackPanel>
+                <!-- File entries of the selected folder -->
+                <Grid RowSpacing="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
 
-                <Grid Grid.Row="1">
-                    <ListView ItemsSource="{x:Bind ViewModel.VisibleFiles}"
-                              SelectedItem="{x:Bind ViewModel.SelectedFile, Mode=TwoWay}"
-                              ItemContainerStyle="{StaticResource FullRowItemStyle}"
-                              Background="Transparent"
-                              Tapped="List_Tapped"
-                              KeyDown="List_KeyDown">
-                        <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="vm:WatchedFileViewModel">
-                                <Grid Padding="12,0,4,0" ColumnSpacing="4"
-                                      Background="Transparent"
-                                      PointerEntered="Row_PointerEntered"
-                                      PointerExited="Row_PointerExited">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="{x:Bind FilePath}"
-                                                   TextTrimming="CharacterEllipsis" />
-                                        <!-- Only in "All": which folder this entry belongs to -->
-                                        <TextBlock Text="{x:Bind FolderName, Mode=OneWay}"
-                                                   Visibility="{x:Bind ShowFolderName, Mode=OneWay}"
-                                                   Style="{StaticResource CaptionTextBlockStyle}"
-                                                   Opacity="0.6"
-                                                   TextTrimming="CharacterEllipsis" />
-                                    </StackPanel>
-                                    <Button Grid.Column="1"
-                                            Width="32" Height="32" Padding="0"
-                                            VerticalAlignment="Center"
-                                            Visibility="{x:Bind IsHovered, Mode=OneWay}"
-                                            Click="OpenFileButton_Click"
-                                            ToolTipService.ToolTip="Open in default editor">
-                                        <FontIcon Glyph="&#xE70F;" FontSize="14" />
-                                    </Button>
-                                    <!-- Remove is always the rightmost button -->
-                                    <Button Grid.Column="2"
-                                            Width="32" Height="32" Padding="0"
-                                            VerticalAlignment="Center"
-                                            Visibility="{x:Bind IsHovered, Mode=OneWay}"
-                                            Click="RemoveFileButton_Click"
-                                            ToolTipService.ToolTip="Remove from list">
-                                        <FontIcon Glyph="&#xE74D;" FontSize="14" />
-                                    </Button>
-                                </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-                    <TextBlock Text="No files yet. Click 'Add ini file...' to get started."
-                               Visibility="{x:Bind ViewModel.HasNoVisibleFiles, Mode=OneWay}"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               TextAlignment="Center" TextWrapping="Wrap" MaxWidth="220"
-                               Opacity="0.6" IsHitTestVisible="False" />
-                </Grid>
-            </Grid>
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="AddFileButton" Content="Add ini file..." Click="AddFileButton_Click" />
+                    </StackPanel>
 
-            <!-- Right: watched keys for the selected file entry -->
-            <Grid Grid.Column="2" RowSpacing="8">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-
-                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
-                    <Button x:Name="AddKeyButton" Content="Add key..."
-                            IsEnabled="{x:Bind ViewModel.HasSelectedFile, Mode=OneWay}"
-                            Click="AddKeyButton_Click" />
-                </StackPanel>
-
-                <Grid Grid.Row="1">
-                    <ListView ItemsSource="{x:Bind ViewModel.SelectedFileKeys, Mode=OneWay}"
-                              ItemContainerStyle="{StaticResource FullRowItemStyle}"
-                              Background="Transparent"
-                              Tapped="List_Tapped"
-                              KeyDown="List_KeyDown">
-                        <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="vm:WatchedKeyViewModel">
-                                <Grid Padding="12,0,4,0" ColumnSpacing="8"
-                                      Background="Transparent"
-                                      PointerEntered="Row_PointerEntered"
-                                      PointerExited="Row_PointerExited">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{x:Bind DisplayLabel}"
-                                               VerticalAlignment="Center"
-                                               MinWidth="160"
-                                               TextTrimming="CharacterEllipsis" />
-                                    <TextBox Grid.Column="1"
-                                             Text="{x:Bind DesiredValue, Mode=TwoWay}"
-                                             Width="160"
-                                             VerticalAlignment="Center"
-                                             LostFocus="DesiredValueBox_LostFocus" />
-                                    <!-- Status on disk: one icon, name on hover. Only one is visible at a time. -->
-                                    <Grid Grid.Column="2" VerticalAlignment="Center">
-                                        <FontIcon Glyph="&#xE73E;" FontSize="16"
-                                                  Foreground="{ThemeResource SystemFillColorSuccessBrush}"
-                                                  Visibility="{x:Bind IsUnique, Mode=OneWay}"
-                                                  ToolTipService.ToolTip="Unique" />
-                                        <FontIcon Glyph="&#xE711;" FontSize="16"
-                                                  Foreground="{ThemeResource SystemFillColorCriticalBrush}"
-                                                  Visibility="{x:Bind IsNotFound, Mode=OneWay}"
-                                                  ToolTipService.ToolTip="Not Found" />
-                                        <FontIcon Glyph="&#xE7BA;" FontSize="16"
-                                                  Foreground="{ThemeResource SystemFillColorCautionBrush}"
-                                                  Visibility="{x:Bind IsDuplicate, Mode=OneWay}"
-                                                  ToolTipService.ToolTip="Duplicate" />
+                    <Grid Grid.Row="1">
+                        <ListView ItemsSource="{x:Bind ViewModel.VisibleFiles}"
+                                  SelectedItem="{x:Bind ViewModel.SelectedFile, Mode=TwoWay}"
+                                  ItemContainerStyle="{StaticResource FullRowItemStyle}"
+                                  Background="Transparent"
+                                  Tapped="List_Tapped"
+                                  KeyDown="List_KeyDown">
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="vm:WatchedFileViewModel">
+                                    <Grid Padding="12,0,4,0" ColumnSpacing="4"
+                                          Background="Transparent"
+                                          PointerEntered="Row_PointerEntered"
+                                          PointerExited="Row_PointerExited">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="{x:Bind FilePath}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <!-- Only in "All": which folder this entry belongs to -->
+                                            <TextBlock Text="{x:Bind FolderName, Mode=OneWay}"
+                                                       Visibility="{x:Bind ShowFolderName, Mode=OneWay}"
+                                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                                       Opacity="0.6"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                        <Button Grid.Column="1"
+                                                Width="32" Height="32" Padding="0"
+                                                VerticalAlignment="Center"
+                                                Visibility="{x:Bind IsHovered, Mode=OneWay}"
+                                                Click="OpenFileButton_Click"
+                                                ToolTipService.ToolTip="Open in default editor">
+                                            <FontIcon Glyph="&#xE70F;" FontSize="14" />
+                                        </Button>
+                                        <!-- Remove is always the rightmost button -->
+                                        <Button Grid.Column="2"
+                                                Width="32" Height="32" Padding="0"
+                                                VerticalAlignment="Center"
+                                                Visibility="{x:Bind IsHovered, Mode=OneWay}"
+                                                Click="RemoveFileButton_Click"
+                                                ToolTipService.ToolTip="Remove from list">
+                                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                        </Button>
                                     </Grid>
-                                    <!-- Last Apply hit a file error; hover shows the actual message -->
-                                    <FontIcon Grid.Column="3"
-                                              Glyph="&#xE783;" FontSize="16"
-                                              Foreground="{ThemeResource SystemFillColorCriticalBrush}"
-                                              VerticalAlignment="Center"
-                                              Visibility="{x:Bind HasApplyError, Mode=OneWay}"
-                                              ToolTipService.ToolTip="{x:Bind LastApplyError, Mode=OneWay}" />
-                                    <!-- Column 4 is empty space, pushing the buttons to the right edge -->
-                                    <Button Grid.Column="5"
-                                            Width="32" Height="32" Padding="0"
-                                            VerticalAlignment="Center"
-                                            Visibility="{x:Bind ShowRevert, Mode=OneWay}"
-                                            Click="RevertKeyButton_Click"
-                                            ToolTipService.ToolTip="{x:Bind RevertToolTip}">
-                                        <FontIcon Glyph="&#xE7A7;" FontSize="14" />
-                                    </Button>
-                                    <!-- Remove is always the rightmost button -->
-                                    <Button Grid.Column="6"
-                                            Width="32" Height="32" Padding="0"
-                                            VerticalAlignment="Center"
-                                            Visibility="{x:Bind IsHovered, Mode=OneWay}"
-                                            Click="RemoveKeyButton_Click"
-                                            ToolTipService.ToolTip="Stop watching this key">
-                                        <FontIcon Glyph="&#xE74D;" FontSize="14" />
-                                    </Button>
-                                </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-                    <TextBlock Text="{x:Bind ViewModel.KeysEmptyMessage, Mode=OneWay}"
-                               Visibility="{x:Bind ViewModel.ShowKeysEmptyMessage, Mode=OneWay}"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               TextAlignment="Center" TextWrapping="Wrap" MaxWidth="220"
-                               Opacity="0.6" IsHitTestVisible="False" />
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                        <TextBlock Text="No files yet. Click 'Add ini file...' to get started."
+                                   Visibility="{x:Bind ViewModel.HasNoVisibleFiles, Mode=OneWay}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   TextAlignment="Center" TextWrapping="Wrap" MaxWidth="220"
+                                   Opacity="0.6" IsHitTestVisible="False" />
+                    </Grid>
                 </Grid>
+
+                <!-- Keys panel: covers the file list while an entry is selected. Shown/hidden
+                     (with a slide animation) by code-behind when HasSelectedFile changes;
+                     closing it just clears the selected entry. Opaque background so the file
+                     list doesn't show through. -->
+                <Border x:Name="KeysPanel"
+                        Visibility="Collapsed"
+                        Padding="12"
+                        CornerRadius="8"
+                        BorderThickness="1"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+                    <Border.RenderTransform>
+                        <TranslateTransform x:Name="KeysPanelTransform" />
+                    </Border.RenderTransform>
+
+                    <Grid RowSpacing="8">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Header: Add key | ...entry drop-down... | close -->
+                        <Grid Grid.Row="0" ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <Button x:Name="AddKeyButton" Content="Add key..."
+                                    IsEnabled="{x:Bind ViewModel.HasSelectedFile, Mode=OneWay}"
+                                    Click="AddKeyButton_Click" />
+
+                            <!-- Switch between the folder's entries without closing the panel -->
+                            <ComboBox Grid.Column="1"
+                                      HorizontalAlignment="Stretch"
+                                      ItemsSource="{x:Bind ViewModel.VisibleFiles}"
+                                      SelectedItem="{x:Bind ViewModel.SelectedFile, Mode=TwoWay}"
+                                      ToolTipService.ToolTip="Switch ini file entry">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:WatchedFileViewModel">
+                                        <StackPanel>
+                                            <TextBlock Text="{x:Bind FilePath}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{x:Bind FolderName, Mode=OneWay}"
+                                                       Visibility="{x:Bind ShowFolderName, Mode=OneWay}"
+                                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                                       Opacity="0.6"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+
+                            <Button Grid.Column="2"
+                                    Width="32" Height="32" Padding="0"
+                                    Click="CloseKeysPanelButton_Click"
+                                    ToolTipService.ToolTip="Close">
+                                <FontIcon Glyph="&#xE711;" FontSize="14" />
+                            </Button>
+                        </Grid>
+
+                        <Grid Grid.Row="1">
+                            <ListView ItemsSource="{x:Bind ViewModel.SelectedFileKeys, Mode=OneWay}"
+                                      ItemContainerStyle="{StaticResource FullRowItemStyle}"
+                                      Background="Transparent"
+                                      Tapped="List_Tapped"
+                                      KeyDown="List_KeyDown">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:WatchedKeyViewModel">
+                                        <!-- Key name on the left; everything else right-aligned. The icon
+                                             and button columns have fixed widths, so value boxes line up
+                                             across rows and don't shift when hover buttons appear. -->
+                                        <Grid Padding="12,0,4,0" ColumnSpacing="8"
+                                              Background="Transparent"
+                                              PointerEntered="Row_PointerEntered"
+                                              PointerExited="Row_PointerExited">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="20" />
+                                                <ColumnDefinition Width="20" />
+                                                <ColumnDefinition Width="32" />
+                                                <ColumnDefinition Width="32" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{x:Bind DisplayLabel}"
+                                                       VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <TextBox Grid.Column="1"
+                                                     Text="{x:Bind DesiredValue, Mode=TwoWay}"
+                                                     Width="160"
+                                                     VerticalAlignment="Center"
+                                                     LostFocus="DesiredValueBox_LostFocus" />
+                                            <!-- Status on disk: one icon, name on hover. Only one is visible at a time. -->
+                                            <Grid Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                <FontIcon Glyph="&#xE73E;" FontSize="16"
+                                                          Foreground="{ThemeResource SystemFillColorSuccessBrush}"
+                                                          Visibility="{x:Bind IsUnique, Mode=OneWay}"
+                                                          ToolTipService.ToolTip="Unique" />
+                                                <FontIcon Glyph="&#xE711;" FontSize="16"
+                                                          Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                                          Visibility="{x:Bind IsNotFound, Mode=OneWay}"
+                                                          ToolTipService.ToolTip="Not Found" />
+                                                <FontIcon Glyph="&#xE7BA;" FontSize="16"
+                                                          Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                                          Visibility="{x:Bind IsDuplicate, Mode=OneWay}"
+                                                          ToolTipService.ToolTip="Duplicate" />
+                                            </Grid>
+                                            <!-- Last Apply hit a file error; hover shows the actual message -->
+                                            <FontIcon Grid.Column="3"
+                                                      Glyph="&#xE783;" FontSize="16"
+                                                      Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                                      VerticalAlignment="Center"
+                                                      Visibility="{x:Bind HasApplyError, Mode=OneWay}"
+                                                      ToolTipService.ToolTip="{x:Bind LastApplyError, Mode=OneWay}" />
+                                            <Button Grid.Column="4"
+                                                    Width="32" Height="32" Padding="0"
+                                                    VerticalAlignment="Center"
+                                                    Visibility="{x:Bind ShowRevert, Mode=OneWay}"
+                                                    Click="RevertKeyButton_Click"
+                                                    ToolTipService.ToolTip="{x:Bind RevertToolTip}">
+                                                <FontIcon Glyph="&#xE7A7;" FontSize="14" />
+                                            </Button>
+                                            <!-- Remove is always the rightmost button -->
+                                            <Button Grid.Column="5"
+                                                    Width="32" Height="32" Padding="0"
+                                                    VerticalAlignment="Center"
+                                                    Visibility="{x:Bind IsHovered, Mode=OneWay}"
+                                                    Click="RemoveKeyButton_Click"
+                                                    ToolTipService.ToolTip="Stop watching this key">
+                                                <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                            </Button>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                            <TextBlock Text="{x:Bind ViewModel.KeysEmptyMessage, Mode=OneWay}"
+                                       Visibility="{x:Bind ViewModel.ShowKeysEmptyMessage, Mode=OneWay}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       TextAlignment="Center" TextWrapping="Wrap" MaxWidth="220"
+                                       Opacity="0.6" IsHitTestVisible="False" />
+                        </Grid>
+                    </Grid>
+                </Border>
             </Grid>
         </Grid>
 

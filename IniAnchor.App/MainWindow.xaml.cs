@@ -11,6 +11,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.Windows.Storage.Pickers;
 using Windows.System;
 using Windows.Graphics;
@@ -33,6 +34,61 @@ namespace IniAnchor.App
 
             RestoreWindowSize();
             AppWindow.Closing += (_, _) => SaveWindowSize();
+
+            // The keys panel opens/closes with the selected entry (see SetKeysPanelOpen).
+            ViewModel.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(MainViewModel.HasSelectedFile))
+                    SetKeysPanelOpen(ViewModel.HasSelectedFile);
+            };
+        }
+
+        // --- Keys fly-in panel ---
+        // Open = an entry is selected. Closing (close button, Esc/empty-space click in the file
+        // list, switching folders, removing the entry) always goes through clearing SelectedFile,
+        // so there's a single source of truth. Only animates when open/closed actually changes,
+        // so switching entries via the panel's drop-down doesn't replay the slide.
+
+        private bool _keysPanelOpen;
+
+        private void SetKeysPanelOpen(bool open)
+        {
+            if (open == _keysPanelOpen)
+                return;
+
+            _keysPanelOpen = open;
+            var width = ContentArea.ActualWidth;
+
+            if (open)
+            {
+                KeysPanelTransform.X = width; // start off to the right, avoids a one-frame flash
+                KeysPanel.Visibility = Visibility.Visible;
+            }
+
+            var slide = new DoubleAnimation
+            {
+                From = open ? width : 0,
+                To = open ? 0 : width,
+                Duration = TimeSpan.FromMilliseconds(250),
+                EasingFunction = new CubicEase { EasingMode = open ? EasingMode.EaseOut : EasingMode.EaseIn }
+            };
+            Storyboard.SetTarget(slide, KeysPanelTransform);
+            Storyboard.SetTargetProperty(slide, "X");
+
+            var storyboard = new Storyboard();
+            storyboard.Children.Add(slide);
+            storyboard.Completed += (_, _) =>
+            {
+                // Re-check: the panel may have been reopened while it was sliding out.
+                if (!_keysPanelOpen)
+                    KeysPanel.Visibility = Visibility.Collapsed;
+            };
+            storyboard.Begin();
+        }
+
+        private void CloseKeysPanelButton_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel.SelectedFile = null;
         }
 
         // --- Remembered window size ---
