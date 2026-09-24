@@ -10,17 +10,20 @@ A lightweight Windows desktop app for keeping specific values in `.ini` files pi
 - **Quick row actions on hover.**
   - Folders: **rename** or **delete**.
   - Files: **open in your default `.ini` editor** (e.g. Notepad) or **remove** from the list.
-  - Keys: **revert** to the value the key had when you added it, or **stop watching** it.
-- **Pick keys visually, not blind.** For each watched file, open a searchable picker listing every `Key = value` pair actually found in the file, grouped under their section titles — no guessing key names or typos. Search matches section or key names.
-- **Set a desired value per key**, editable directly in the app. The value found in the file when you added the key is remembered, so you can always revert to it.
+  - Keys: **comment out / enable**, **revert** to how the key was when you added it, or **stop watching** it.
+- **Pick keys visually, not blind.** For each watched file, open a searchable picker listing every `Key = value` pair actually found in the file, grouped under their section titles — no guessing key names or typos. Search matches section or key names. Keys that are currently commented out in the file are listed too (dimmed, with `;`), so you can pick them up and switch them on.
+- **Set a desired value per key**, editable directly in the app. The value (and on/off state) found in the file when you added the key is remembered, so you can always revert to it.
+- **Turn keys off without removing them.** Some programs complain about a key with an empty value, but are fine when the line is commented out. A key switched off is commented out on Apply (`;launch = …`), and switched back on it's uncommented with your value. Keys that are off are shown dimmed with a `;` in front, just like in the file, and keep their value for when you switch them back on.
+  - Only comments that look exactly like a key line (`; name = value`, with a name without spaces or quotes) count as commented-out keys, so ordinary explanatory comments are never mistaken for keys.
+  - An active line always wins: commented-out examples next to a real key are ignored and never touched.
 - **Apply a folder or everything.** **Apply folder** writes only the selected folder's keys; **Apply all** writes every folder's keys. Both sit at the bottom of the sidebar. A confirmation prompt shows how many keys/entries will be set before anything is written.
-  - If several folders set the same key in the same file to different values, the prompt warns about it and the folder **lowest in the sidebar wins**; the others are reported as overridden.
+  - If several folders set the same key in the same file differently (different values, or on in one and off in another), the prompt warns about it and the folder **lowest in the sidebar wins**; the others are reported as overridden.
   - Entries for the same file are merged first, so each file is read once and written at most once per Apply.
 - **Safe by design:**
   - A key is only ever written if it's **unique** in the file (or within its section). If a key is missing or duplicated, it's skipped and flagged rather than guessed at — your file is never touched ambiguously.
   - Writes are **crash-safe**: each file is written to a temporary file first, then swapped in atomically, so a crash or power loss mid-write can never leave a corrupted `.ini` file.
   - Everything else in the file — comments, spacing, formatting, unrelated keys — is preserved exactly as-is.
-  - **Only writes what differs.** Keys that already have the desired value are left alone, and a file where nothing differs isn't written at all — its modified time stays unchanged, apps watching it aren't triggered, and a locked or read-only file that's already correct doesn't cause an error.
+  - **Only writes what differs.** Keys that are already as you want them are left alone, and a file where nothing differs isn't written at all — its modified time stays unchanged, apps watching it aren't triggered, and a locked or read-only file that's already correct doesn't cause an error.
 - **Clear status per key.** An icon next to each key shows its state in the file — hover it for **Unique**, **Not Found**, or **Duplicate** — plus an error icon (with the actual error message on hover) if the last Apply couldn't write the file. After each Apply, a summary above the apply buttons shows how many keys were applied, already set, overridden, not found, duplicate, or hit file errors.
 - **Easy selection.** Click an empty area of a list, press **Esc**, or **Ctrl+click** the selected row to deselect it. Buttons that need a selection (like **Add key...**) are disabled until there is one.
 - **Remembers the window size** between launches. The window has a minimum size of 1000×600 and starts at that size on first launch.
